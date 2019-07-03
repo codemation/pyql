@@ -26,8 +26,8 @@ def get_cursor_manager(connect_db):
     return execute
 
 class database:
-    def __init__(self, db, db_name):
-        self.db_con = db
+    def __init__(self, db_con, db_name):
+        self.db_con = db_con
         self.db_name = db_name
         self.connect = get_db_manager(self.db_con)
         self.cursor = get_cursor_manager(self.connect)
@@ -47,16 +47,11 @@ class database:
             except Exception as e:
                 print(repr(e))
 
-
 def run_test():
     import sqlite3
-    db = database(sqlite3.connect, 'testdb')
-    """
-    db.run('''CREATE TABLE stocks
-             (date text, trans text, symbol text, qty real, price real)''')
-    db.run("INSERT INTO stocks VALUES ('2006-01-05','BUY','RHAT',100,35.14)")
-    db = database(sqlite3.connect, 'testdb')
-    """
-    for i in db.get('SELECT * FROM stocks ORDER BY price'):
+    db = database(sqlite3.connect, "testdb")
+    db.run('''CREATE TABLE stocks_with_order
+             (order_num integer primary key, date text, trans text, symbol text, qty real, price real)''')
+    db.run("INSERT INTO stocks_with_order VALUES (0,'2006-01-05','BUY','RHAT',100,35.14)")
+    for i in db.get('SELECT * FROM stocks_with_order ORDER BY price'):
         print(i)
-run_test()
