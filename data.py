@@ -28,6 +28,11 @@ def get_cursor_manager(connect_db):
     return cursor
 
 class database:
+    """
+        Intialize with db connector & name of database. If database exists, it will be used else a new db will be created \n
+        Example:
+            db = database(sqlite3.connect, "testdb")
+    """
     def __init__(self, db_con, db_name):
         self.db_con = db_con
         self.db_name = db_name
@@ -51,6 +56,21 @@ class database:
             except Exception as e:
                 print(repr(e))
     def create_table(self,name, columns, prim_key=None):
+        """
+            Usage:
+                    db.create_table(
+                        'stocks_new_tb2', 
+                        [
+                            col('order_num', int, 'AUTOINCREMENT'),
+                            col('date', str, None),
+                            col('trans', str, None),
+                            col('symbol', str, None),
+                            col('qty', float, None),
+                            col('price', str, None)
+                            ], 
+                        'order_num' # Primary Key
+                    )
+        """
         self.tables[name] = table(name, self, columns, prim_key)
 col = namedtuple('col', ['name', 'type', 'mods'])
 
@@ -97,7 +117,14 @@ class table:
         return where_sel
 
     def select(self, selection, **kw):
-        
+        """
+            Usage: returns list of dictionaries for each selection in each row. 
+                sel = db.tables['stocks_new_tb2'].select('order_num,symbol', where=('trans', 'BUY'))
+                    OR
+                sel = db.tables['stocks_new_tb2'].select('*')
+                for r in sel:
+                    print(r)
+        """
         if ',' in selection:
             sels = ''.join(selection.split(' ')).split(',')
             for i in sels:
@@ -130,6 +157,15 @@ class table:
 
         return toReturn
     def insert(self, **kw):
+        """
+            Usage:
+                    db.tables['stocks_new_tb2'].insert(
+                        date='2006-01-05',
+                        trans='BUY',
+                        symbol='RHAT',
+                        qty=100.0,
+                        price=35.14)
+        """
         cols = '('
         vals = '('
         #checking input kw's for correct value types
@@ -161,6 +197,10 @@ class table:
         print(query)
         self.database.run(query)
     def update(self,**kw):
+        """
+            Usage:
+                db.tables['stocks_new_tb2'].update(symbol='NTAP', where=('order_num', 1))
+        """
         for cName, col in self.columns.items():
             if not cName in kw:
                 continue
@@ -185,6 +225,11 @@ class table:
         print(query)
         self.database.run(query)
     def delete(self, all_rows=False, **kw):
+        """
+            Usage:
+                db.tables['stocks_new_tb2'].delete(where=('order_num', 1))
+                db.tables['stocks_new_tb2'].delete(all_rows=True)
+        """
         where_sel = self.__where(kw)
         print(len(where_sel) < 1)
         if len(where_sel) < 1:
