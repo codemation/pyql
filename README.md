@@ -10,10 +10,9 @@ Simple python database orchestration utility which makes it easy to add tables, 
 # Getting Started 
 
 Note Some differences may apply for column options i.e AUTOINCREMENT(sqlite) vs AUTO_INCREMENT(mysql)
-
 See DB documentation for reference.
 
-    # DB connection
+  # DB connection
 
         import sqlite3
         db = database(
@@ -32,10 +31,9 @@ See DB documentation for reference.
             type='mysql'
             )
     
-    # Table Create
-
-    Requires List of at least 2 item tuples, max 3
-    ('column name', str|int|float|byte, None|AUTO_INCREMENT|NOT NULL|OTHERS(not listed)
+   # Table Create
+   Requires List of at least 2 item tuples, max 3
+   ('column name', str|int|float|byte, None|AUTO_INCREMENT|NOT NULL|OTHERS(not listed)
     
         db.create_table(
             'stocks', 
@@ -49,7 +47,7 @@ See DB documentation for reference.
             ], 
             'order_num' # Primary Key 
         )
-    Result:
+   Result:
     
         mysql> describe stocks;
         +-----------+---------+------+-----+---------+----------------+
@@ -64,9 +62,9 @@ See DB documentation for reference.
         +-----------+---------+------+-----+---------+----------------+
         6 rows in set (0.00 sec)
 
-    # Insert Data 
+   # Insert Data 
 
-    Requires key-value pairs - may be input using dict or the following
+   Requires key-value pairs - may be input using dict or the following
     
         trade = {'date': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': 35.14}
         db.tables['stocks'].insert(**trade)
@@ -80,24 +78,24 @@ See DB documentation for reference.
             price=35.14
         )
         
-    # Select Data
+   # Select Data
         sel = db.tables['stocks'].select('*', where=('symbol','RHAT'))
         print(sel)
     
-    Result:
+   Result:
     
         [{'order_num': 1, 'date': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': '35.14'}]
     
-    # Update Data
+   # Update Data
     
         db.tables['stocks'].update(symbol='NTAP',trans='SELL', where=('order_num', 1))
         sel = db.tables['stocks'].select('*', where=('order_num', 1))
         
-    Result:
+   Result:
     
         [{'order_num': 1, 'date': '2006-01-05', 'trans': 'SELL', 'symbol': 'NTAP', 'qty': 100.0, 'price': '35.14'}]
 
-    # Delete Data 
+   # Delete Data 
 
         db.tables['stocks'].delete(where=('order_num', 1))
 
