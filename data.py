@@ -1,25 +1,29 @@
 from contextlib import contextmanager
 from collections import namedtuple
 
-def get_db_manager(db_connect, db_name):
+col = namedtuple('col', ['name', 'type', 'mods'])
+
+def get_db_manager(db_connect):
     @contextmanager
     def connect(*args, **kwds):
         # Code to acquire resource, e.g.:
-        db_n = db_name
-        conn = db_connect(db_n,*args, **kwds)
+        conn = db_connect(*args, **kwds)
         try:
             yield conn
         except:
+            print(f'failed to yeild connection with params {kwds} using {db_connect} result {conn}')
             if conn:
                 conn.rollback()
         finally:
             if conn:
                 conn.close()
     return connect
-def get_cursor_manager(connect_db):
+def get_cursor_manager(connect_db, params={}):
     @contextmanager
     def cursor():
-        with connect_db() as conn:
+        connect_params = params
+        print(f'Running query with {connect_params}')
+        with connect_db(**connect_params) as conn:
             c = conn.cursor()
             try:
                 yield c
@@ -30,49 +34,107 @@ def get_cursor_manager(connect_db):
 class database:
     """
         Intialize with db connector & name of database. If database exists, it will be used else a new db will be created \n
-        Example:
+
+        sqlite example:
+            import sqlite3
             db = database(sqlite3.connect, "testdb")
+        mysql example:
+            import mysql.connector
+            db = database(mysql.connector.connect, **config)
+        
     """
-    def __init__(self, db_con, db_name):
+    def __init__(self, db_con, **kw):
+        self.connetParams =  ['user', 'password', 'database', 'host']
+        self.connectConfig = {}
+        for k,v in kw.items():
+            if k in self.connetParams:
+                self.connectConfig[k] = v
         self.db_con = db_con
-        self.db_name = db_name
-        self.connect = get_db_manager(self.db_con, self.db_name)
-        self.cursor = get_cursor_manager(self.connect)
+        self.type = 'sqlite' if not 'type' in kw else kw['type']
+        self.db_name = kw['database'] if 'database' in kw else 'NO_DB_NAME_PROVIDED'
+        assert not self.db_name == 'NO_DB_NAME_PROVIDED', "NO_DB_NAME_PROVIDED"
+
+        self.connect = get_db_manager(self.db_con)
+        self.cursor = get_cursor_manager(self.connect, self.connectConfig) 
         self.tables = {}
+        self.load_tables()
     def run(self, query):
         with self.cursor() as c:
+            print(f'{self.db_name}.run cursor {c} {query}')
             try:
                 result = c.execute(query)
+                if result == None:
+                    result = []
+                    for v in c:
+                        result.append(v)
                 return result
             except Exception as e:
                 print(repr(e))
+                return repr(e)
+
     def get(self, query):
+        print(f'{self.db_name}.get query: {query}')
         with self.cursor() as c:
             try:
                 rows = []
-                for row in c.execute(query):
+                result = c.execute(query)
+                if result == None:
+                    result = []
+                    for v in c:
+                        result.append(v)
+                    return result
+                for row in result:
                     rows.append(row)
                 return rows
             except Exception as e:
                 print(repr(e))
+    def load_tables(self):
+        if self.type == 'mysql':
+            def describe_table_to_col(column):
+                typeTranslate = {'int': int, 'text': str, 'double': float, 'varchar': str}
+                field = column[0]
+                typ = None
+                for k in typeTranslate:
+                    if k in column[1]:
+                        typ = typeTranslate[k]
+                assert typ is not None, f'type not found in translate dict for {column}'
+                Null = 'NOT NULL ' if column[2] == 'NO' else ''
+                Key = 'PRIMARY KEY ' if column[3] == 'PRI' else ''
+                Default = '' # TOODOO - check if this needs implementing
+                Extra = column[5].upper()
+                return col(field, typ, Null+Key+Extra)
+            for table in self.run('show tables'):
+                colsInTable = []
+                for c in self.run(f'describe {table[0]}'):
+                    colsInTable.append(describe_table_to_col(c))
+                PrimaryKey = None
+                for colItem in colsInTable: 
+                    if 'PRIMARY KEY' in colItem.mods:
+                        PrimaryKey = colItem.name
+                self.create_table(table[0], colsInTable, PrimaryKey)
     def create_table(self,name, columns, prim_key=None):
         """
             Usage:
                     db.create_table(
                         'stocks_new_tb2', 
                         [
-                            col('order_num', int, 'AUTOINCREMENT'),
-                            col('date', str, None),
-                            col('trans', str, None),
-                            col('symbol', str, None),
-                            col('qty', float, None),
-                            col('price', str, None)
+                            ('order_num', int, 'AUTOINCREMENT'),
+                            ('date', str, None),
+                            ('trans', str, None),
+                            ('symbol', str, None),
+                            ('qty', float, None),
+                            ('price', str, None)
                             ], 
                         'order_num' # Primary Key
                     )
         """
-        self.tables[name] = table(name, self, columns, prim_key)
-col = namedtuple('col', ['name', 'type', 'mods'])
+        #Convert tuple columns -> named_tuples
+        cols = []
+        for c in columns:
+            # Allows for len(2) tuple input ('name', int) --> converts to col('name', int, None)
+            cols.append(col(*c) if len(c) > 2 else col(*c, None)) 
+        self.tables[name] = table(name, self, cols, prim_key)
+
 
 class table:
     def __init__(self, name, database, columns, prim_key = None):
@@ -87,8 +149,7 @@ class table:
         }
         self.columns = {}
         for c in columns:
-            print(c.type)
-            assert c.type in self.types
+            assert c.type in self.types, f'unknown type {c.type} in {c.name} {c}'
             assert c.name not in self.columns
             self.columns[c.name] = c
         if prim_key is not None:
@@ -101,7 +162,10 @@ class table:
                 if col.type == v:
                     if len(cols) > 1:
                         cols = cols + ', '
-                    cols = cols + '%s %s'%(col.name, k.upper())
+                    if cName == self.prim_key and (k=='text' or k=='blob'):
+                        cols = cols + '%s %s'%(col.name, 'VARCHAR(36)')
+                    else:
+                        cols = cols + '%s %s'%(col.name, k.upper())
                     if cName == self.prim_key:
                         cols = cols + ' PRIMARY KEY'                    
                     if col.mods is not None:
@@ -140,7 +204,6 @@ class table:
             where = where_sel,
             order = orderby
         )
-
         rows = self.database.get(query)
 
         #dictonarify each row result and return
@@ -171,35 +234,32 @@ class table:
         #checking input kw's for correct value types
         for cName, col in self.columns.items():
             if not cName in kw:
-                if 'NOT NULL' in col.mods:
-                    print(cName + ' is a required field for INSERT in table %s'%(self.name))
-                    return
+                if not col.mods == None:
+                    if 'NOT NULL' in col.mods:
+                        print(f'{cName} is a required field for INSERT in table {self.name}')
+                        return
                 continue
             try:
                 kw[cName] = col.type(kw[cName])
             except:
-                print("Value provided for %s is not of the correct %s type or could not be converted"%(cName, col.type))
+                print(f"Value provided for {cName} is not of the correct {col.type} type or could not be converted")
                 return
             if len(cols) > 2:
                 cols = cols + ', '
                 vals = vals + ', '
             cols = cols + cName
-            vals = vals + str(kw[cName] if col.type is not str else "'" + kw[cName] + "'" )
+            vals = vals + str(kw[cName] if col.type is not str else '"' + kw[cName] + '"' )
 
         cols = cols + ')'
         vals = vals + ')'
 
-        query = 'INSERT INTO {name} {columns} VALUES {values}'.format(
-            name = self.name,
-            columns = cols,
-            values = vals
-        )
+        query = f'INSERT INTO {self.name} {cols} VALUES {vals}'
         print(query)
         self.database.run(query)
     def update(self,**kw):
         """
             Usage:
-                db.tables['stocks_new_tb2'].update(symbol='NTAP', where=('order_num', 1))
+                db.tables['stocks'].update(symbol='NTAP',trans='SELL', where=('order_num', 1))
         """
         for cName, col in self.columns.items():
             if not cName in kw:
@@ -227,8 +287,8 @@ class table:
     def delete(self, all_rows=False, **kw):
         """
             Usage:
-                db.tables['stocks_new_tb2'].delete(where=('order_num', 1))
-                db.tables['stocks_new_tb2'].delete(all_rows=True)
+                db.tables['stocks'].delete(where=('order_num', 1))
+                db.tables['stocks'].delete(all_rows=True)
         """
         where_sel = self.__where(kw)
         print(len(where_sel) < 1)
@@ -243,39 +303,65 @@ class table:
 # - Add support for creating column indexes per tables
 # - Add suppport for foreign keys & joins with queries
 # - Determine if views are needed and add support
+# - Support for transactions?
 
-
-def run_test():
+def run_mysql_test():
+    import mysql.connector
+    db = database(
+        mysql.connector.connect,
+        database='mytestdb',
+        user='mysqluser',
+        password='my-secret-pw',
+        host='localhost',
+        type='mysql'
+        )
+    test(db)
+def run_sqlite_test():
     import sqlite3
-    db = database(sqlite3.connect, "testdb")
-    db.run('''CREATE TABLE stocks_with_order
-             (order_num integer primary key, date text, trans text, symbol text, qty real, price real)''')
-    db.run('''CREATE TABLE stocks_with_unique_order 
-    (order_num INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, date text, trans text, symbol text, qty real, price real)''')
-    db.run("INSERT INTO stocks_with_order VALUES (0,'2006-01-05','BUY','RHAT',100,35.14)")
-    db.run("INSERT INTO stocks_with_unique_order (date, trans, symbol, qty, price) VALUES ('2006-01-05','BUY','RHAT',100,35.14)")
-    for i in db.get('SELECT * FROM stocks_with_unique_order ORDER BY price'):
-        print(i)
-    for i in db.get("select name,sql from sqlite_master where type = 'table'"):
-        print(i)
-    db.create_table('stocks_new_tb2', [
-        col('order_num', int, 'AUTOINCREMENT'),
-        col('date', str, None),
-        col('trans', str, None),
-        col('symbol', str, None),
-        col('qty', float, None),
-        col('price', str, None)], 'order_num')
-    db.tables['stocks_new_tb2'].insert(
-        date='2006-01-05',
+    db = database(
+        sqlite3.connect, 
+        database="testdb"
+        )
+
+def test(db):
+
+    db.create_table(
+        'stocks', 
+        [    
+            ('order_num', int, 'AUTO_INCREMENT'),
+            ('date', str),
+            ('trans', str),
+            ('symbol', str),
+            ('qty', float),
+            ('price', str)
+        ], 
+        'order_num' # Primary Key 
+    )
+    print(db.run('describe stocks'))
+    trade = {'data': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': 35.14}
+    db.tables['stocks'].insert(**trade)
+    #    OR
+    db.tables['stocks'].insert(
+        date='2006-01-05', # Note order_num was not required as auto_increment was specified
         trans='BUY',
         symbol='RHAT',
         qty=100.0,
-        price=35.14)
-    db.tables['stocks_new_tb2'].update(symbol='NTAP', where=('order_num', 1))
-    sel = db.tables['stocks_new_tb2'].select('*', where=('symbol','NTAP'))
-    for r in sel:
-        print(r)
-    db.tables['stocks_new_tb2'].delete(where=('order_num', 1))
-    sel = db.tables['stocks_new_tb2'].select('*')
-    for r in sel:
-        print(r)
+        price=35.14
+    )
+    # Select Data
+
+    sel = db.tables['stocks'].select('*', where=('symbol','RHAT'))
+    print(sel)
+    
+    # Update Data
+    
+    db.tables['stocks'].update(symbol='NTAP',trans='SELL', where=('order_num', 1))
+    sel = db.tables['stocks'].select('*', where=('order_num', 1))
+    print(sel)
+
+    # Delete Data 
+
+    db.tables['stocks'].delete(where=('order_num', 1))
+
+#run_mysql_test()
+#run_sqlite_test()
