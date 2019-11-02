@@ -94,4 +94,3 @@ Simple python database orchestration utility which makes it easy to add tables, 
 
     db.tables['stocks'].delete(where={'order_num': 1})
 
-
