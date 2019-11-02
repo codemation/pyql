@@ -22,7 +22,6 @@ def get_cursor_manager(connect_db, params={}):
     @contextmanager
     def cursor():
         connect_params = params
-        print(f'Running query with {connect_params}')
         with connect_db(**connect_params) as conn:
             c = conn.cursor()
             try:
@@ -91,12 +90,13 @@ class database:
     def load_tables(self):
         if self.type == 'mysql':
             def describe_table_to_col(column):
-                typeTranslate = {'int': int, 'text': str, 'double': float, 'varchar': str}
+                typeTranslate = {'tinyint': bool, 'int': int, 'text': str, 'double': float, 'varchar': str}
                 field = column[0]
                 typ = None
                 for k in typeTranslate:
                     if k in column[1]:
                         typ = typeTranslate[k]
+                        break
                 assert typ is not None, f'type not found in translate dict for {column}'
                 Null = 'NOT NULL ' if column[2] == 'NO' else ''
                 Key = 'PRIMARY KEY ' if column[3] == 'PRI' else ''
@@ -140,11 +140,12 @@ class table:
     def __init__(self, name, database, columns, prim_key = None):
         self.name = name
         self.database = database
-        self.types = {int,str,float,bytes}
+        self.types = {int,str,float,bool,bytes}
         self.translation = {
             'integer': int,
             'text': str,
             'real': float,
+            'boolean': bool,
             'blob': bytes 
         }
         self.columns = {}
@@ -234,9 +235,8 @@ class table:
         for row in rows:
             r_dict = {}
             for i,v in enumerate(row):
-                r_dict[keys[i]] = v
+                r_dict[keys[i]] = v if not self.columns[keys[i]].type == bool else bool(v)
             toReturn.append(r_dict)
-
         return toReturn
     def insert(self, **kw):
         """
@@ -352,20 +352,22 @@ def test(db):
             ('trans', str),
             ('symbol', str),
             ('qty', float),
-            ('price', str)
+            ('price', str),
+            ('afterHours', bool)
         ], 
         'order_num' # Primary Key 
     )
     print(db.run('describe stocks'))
-    trade = {'data': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': 35.14}
+    trade = {'data': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': 35.14, 'afterHours': True}
     db.tables['stocks'].insert(**trade)
     #    OR
     db.tables['stocks'].insert(
         date='2006-01-05', # Note order_num was not required as auto_increment was specified
         trans='BUY',
-        symbol='RHAT',
+        symbol='NTAP',
         qty=100.0,
-        price=35.14
+        price=35.14,
+        afterHours=True
     )
     # Select Data
 
