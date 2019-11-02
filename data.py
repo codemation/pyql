@@ -175,24 +175,43 @@ class table:
         self.database.run(schema)
     def __where(self, kw):
         where_sel = ''
+        index = 0
+        if 'where' in kw:
+            for k,v in kw['where'].items():
+                assert k in self.columns, f'{k} is not a valid column in table {self.name}'
+                if index < 1:
+                    where_sel = "WHERE {col}={val}".format(
+                        col = k,
+                        val = v if self.columns[k].type is not str else "'"+v+"'"
+                    )
+                    index+=1
+                else:
+                    where_sel = where_sel + " AND {col}={val}".format(
+                        col = k,
+                        val = v if self.columns[k].type is not str else "'"+v+"'"
+                    )
+        return where_sel
+
         if 'where' in kw:
             assert kw['where'][0] in self.columns, "%s is not a valid column in table within 'where' statement %s"%(kw['where'][0], self.name)
             where_sel = ' ' + 'WHERE %s=%s'%(kw['where'][0], kw['where'][1] if self.columns[kw['where'][0]].type is not str else "'" +kw['where'][1] + "'")
         return where_sel
 
-    def select(self, selection, **kw):
+    def select(self, *selection, **kw):
         """
             Usage: returns list of dictionaries for each selection in each row. 
-                sel = db.tables['stocks_new_tb2'].select('order_num,symbol', where=('trans', 'BUY'))
+                sel = db.tables['stocks_new_tb2'].select('order_num','symbol', where={'trans': 'BUY'})
                     OR
                 sel = db.tables['stocks_new_tb2'].select('*')
                 for r in sel:
                     print(r)
         """
-        if ',' in selection:
-            sels = ''.join(selection.split(' ')).split(',')
-            for i in sels:
-                assert i in self.columns, "%s is not a column in table %s"%(i, self.name)
+        if '*' in selection:
+            selection = '*'
+        else:
+            for i in selection:
+                assert i in self.columns, f"{i} is not a column in table {self.name}"
+            selection = ','.join(selection)
         where_sel = self.__where(kw)
         orderby = ''
         if 'orderby' in kw:
@@ -208,7 +227,7 @@ class table:
 
         #dictonarify each row result and return
         if selection is not '*':
-            keys = sels if ',' in selection else ''.join(selection.split(' '))
+            keys = selection.split(',') if ',' in selection else ''.join(selection.split(' '))
         else:
             keys = list(self.columns.keys())
         toReturn = []
@@ -350,18 +369,18 @@ def test(db):
     )
     # Select Data
 
-    sel = db.tables['stocks'].select('*', where=('symbol','RHAT'))
+    sel = db.tables['stocks'].select('*', where={'symbol':'RHAT'})
     print(sel)
     
     # Update Data
     
-    db.tables['stocks'].update(symbol='NTAP',trans='SELL', where=('order_num', 1))
-    sel = db.tables['stocks'].select('*', where=('order_num', 1))
+    db.tables['stocks'].update(symbol='NTAP',trans='SELL', where={'order_num': 1})
+    sel = db.tables['stocks'].select('*', where={'order_num': 1})
     print(sel)
 
     # Delete Data 
 
-    db.tables['stocks'].delete(where=('order_num', 1))
+    db.tables['stocks'].delete(where={'order_num': 1})
 
 #run_mysql_test()
 #run_sqlite_test()

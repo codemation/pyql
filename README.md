@@ -77,7 +77,7 @@ Simple python database orchestration utility which makes it easy to add tables, 
     )
     # Select Data
 
-    sel = db.tables['stocks'].select('*', where=('symbol','RHAT'))
+    sel = db.tables['stocks'].select('*', where={'order_num': 1})
     print(sel)
     
     Result:
@@ -85,13 +85,13 @@ Simple python database orchestration utility which makes it easy to add tables, 
     
     # Update Data
     
-    db.tables['stocks'].update(symbol='NTAP',trans='SELL', where=('order_num', 1))
-    sel = db.tables['stocks'].select('*', where=('order_num', 1))
+    db.tables['stocks'].update(symbol='NTAP',trans='SELL', where={'order_num': 1})
+    sel = db.tables['stocks'].select('*', where={'order_num': 1})
     Result:
         [{'order_num': 1, 'date': '2006-01-05', 'trans': 'SELL', 'symbol': 'NTAP', 'qty': 100.0, 'price': '35.14'}]
 
     # Delete Data 
 
-    db.tables['stocks'].delete(where=('order_num', 1))
+    db.tables['stocks'].delete(where={'order_num': 1})
 
 
