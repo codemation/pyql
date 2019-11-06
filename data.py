@@ -385,5 +385,5 @@ def test(db):
 
     db.tables['stocks'].delete(where={'order_num': 1})
 
-run_mysql_test()
+#run_mysql_test()
 #run_sqlite_test()
