@@ -259,7 +259,22 @@ class table:
                         return
                 continue
             try:
-                kw[cName] = col.type(kw[cName])
+                if not col.type == bool:
+                    kw[cName] = col.type(kw[cName])
+                else:
+                    try:
+                        kw[cName] = col.type(int(kw[cName]))
+                    except:
+                        #Input is string
+                        if 'true' in kw[cName].lower():
+                            kw[cName] = True
+                        elif 'false' in kw[cName].lower():
+                            kw[cName] = False
+                        else:
+                            print(f"Unsupported value {kw[cName]} provide for column type {col.type}")
+                            del(kw[cName])
+                            continue
+                    
             except:
                 print(f"Value provided for {cName} is not of the correct {col.type} type or could not be converted")
                 return
