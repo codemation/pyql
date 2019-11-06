@@ -43,7 +43,7 @@ class database:
         
     """
     def __init__(self, db_con, **kw):
-        self.connetParams =  ['user', 'password', 'database', 'host']
+        self.connetParams =  ['user', 'password', 'database', 'host', 'port']
         self.connectConfig = {}
         for k,v in kw.items():
             if k in self.connetParams:
@@ -328,10 +328,11 @@ def run_mysql_test():
     import mysql.connector
     db = database(
         mysql.connector.connect,
-        database='mytestdb',
+        database='titanic',
         user='mysqluser',
-        password='my-secret-pw',
-        host='localhost',
+        password='abcd1234',
+        host='192.168.122.120',
+        port='32043',
         type='mysql'
         )
     test(db)
@@ -384,5 +385,5 @@ def test(db):
 
     db.tables['stocks'].delete(where={'order_num': 1})
 
-#run_mysql_test()
+run_mysql_test()
 #run_sqlite_test()
