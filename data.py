@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from collections import namedtuple
 
+#Used for grouping columns with database class
 col = namedtuple('col', ['name', 'type', 'mods'])
 
 def get_db_manager(db_connect):
@@ -351,19 +352,20 @@ def run_mysql_test():
         type='mysql'
         )
     test(db)
-def run_sqlite_test():
+def run_sqlite_test(dbName="testdb"):
     import sqlite3
     db = database(
         sqlite3.connect, 
-        database="testdb"
+        database=dbName
         )
+    test(db)
 
 def test(db):
 
     db.create_table(
         'stocks', 
         [    
-            ('order_num', int, 'AUTO_INCREMENT'),
+            ('order_num', int, 'AUTO_INCREMENT'if db.type == 'mysql' else 'AUTOINCREMENT'),
             ('date', str),
             ('trans', str),
             ('symbol', str),
@@ -399,6 +401,3 @@ def test(db):
     # Delete Data 
 
     db.tables['stocks'].delete(where={'order_num': 1})
-
-#run_mysql_test()
-#run_sqlite_test()
