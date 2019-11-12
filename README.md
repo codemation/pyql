@@ -2,6 +2,24 @@
 
 Simple python database orchestration utility which makes it easy to add tables, insert, select, update, delete items with tables
 
+### Instalation
+
+    $ python3 -m venv myproj
+
+    $ source my-project/bin/activate
+
+Install with PIP
+
+     (myproj)$ pip install pyql-db   
+
+Download & install Library from Github:
+
+    (myproj)$ git clone https://github.com/codemation/pyql.git
+
+Use install script to install the pyql into the activated environment libraries
+
+    (myproj)$ cd pyql; sudo ./install.py install
+
 ### Compatable Databases - Currently
 
 - mysql
