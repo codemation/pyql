@@ -157,7 +157,7 @@ class table:
         if prim_key is not None:
             self.prim_key = prim_key if prim_key in self.columns else None
         self.create_schema()
-    def create_schema(self):
+    def get_schema(self):
         cols = '('
         for cName,col in self.columns.items():
             for k,v in self.translation.items():
@@ -174,7 +174,9 @@ class table:
                         cols = cols + ' %s'%(col.mods)
         cols = cols + ' )'
         schema = """CREATE TABLE {name} {cols}""".format(name = self.name, cols=cols)
-        self.database.run(schema)
+        return schema
+    def create_schema(self):
+        self.database.run(self.get_schema())
     def __where(self, kw):
         where_sel = ''
         index = 0
@@ -264,13 +266,13 @@ class table:
                     kw[cName] = col.type(kw[cName])
                 else:
                     try:
-                        kw[cName] = col.type(int(kw[cName]))
+                        kw[cName] = col.type(int(kw[cName])) if self.database.type == 'mysql' else int(col.type(int(kw[cName])))
                     except:
                         #Input is string
                         if 'true' in kw[cName].lower():
-                            kw[cName] = True
+                            kw[cName] = True if self.database.type == 'mysql' else 1
                         elif 'false' in kw[cName].lower():
-                            kw[cName] = False
+                            kw[cName] = False if self.database.type == 'mysql' else 0
                         else:
                             print(f"Unsupported value {kw[cName]} provide for column type {col.type}")
                             del(kw[cName])
@@ -376,7 +378,7 @@ def test(db):
         'order_num' # Primary Key 
     )
     print(db.run('describe stocks'))
-    trade = {'data': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': 35.14, 'afterHours': True}
+    trade = {'data': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': 35.14, 'afterHours': True if db.type == 'myql' else 1}
     db.tables['stocks'].insert(**trade)
     #    OR
     db.tables['stocks'].insert(
