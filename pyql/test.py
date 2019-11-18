@@ -6,7 +6,7 @@ class TestData(unittest.TestCase):
         import mysql.connector
         os.environ['DB_USER'] = 'testuser'
         os.environ['DB_PASSWORD'] = 'abcd1234'
-        os.environ['DB_HOST'] = '172.17.0.1' if not 'DB_HOST' in os.environ['DB_HOST'] else os.environ['DB_HOST']
+        os.environ['DB_HOST'] = '172.17.0.1' if not 'DB_HOST' in os.environ else os.environ['DB_HOST']
         os.environ['DB_PORT'] = '3306'
         os.environ['DB_NAME'] = 'testdb'
         os.environ['DB_TYPE'] = 'mysql'
