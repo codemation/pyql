@@ -231,7 +231,7 @@ class table:
 
         #dictonarify each row result and return
         if selection is not '*':
-            keys = selection.split(',') if ',' in selection else ''.join(selection.split(' '))
+            keys = selection.split(',') if ',' in selection else selection.split(' ')
         else:
             keys = list(self.columns.keys())
         toReturn = []

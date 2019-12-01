@@ -64,14 +64,33 @@ def test(db):
 
     # Select Data
 
+    def check_sel(requested, selection):
+        requestItems = []
+        if requested == '*':
+            requestItems = trade.keys()
+        else:
+            for request in requested:
+                assert request in trade, f'{request} is not a valid colun in {trade}'
+                requestItems.append(request)
+        
+        for col, value in trade.items():
+            if col in requestItems:
+                assert len(selection) > 0, f"selection should be greater than lenth 0, data was inserted"
+                assert col in selection[0], f"missing column '{col}' in select return"
+                assert str(value) == str(sel[0][col]), f"value {selection[0][col]} returned from select is not what was inserted {value}."
+    # * select # 
     sel = db.tables['stocks'].select('*', where={'symbol':'RHAT'})
     print(sel)
-    for col, value in trade.items():
-        assert len(sel) > 0, f"selection should be greater than lenth 0, data was inserted"
-        assert col in sel[0], f"missing column '{col}' in select return"
-        assert str(value) == str(sel[0][col]), f"value {sel[0][col]} returned from select is not what was inserted {value}."
+    check_sel('*', sel)
 
-    
+    # single select 
+    sel = db.tables['stocks'].select('price', where={'symbol':'RHAT'})
+    check_sel(['price'], sel)
+    print(sel)
+    # multi-select 
+    sel = db.tables['stocks'].select('price', 'date', where={'symbol':'RHAT'})
+    check_sel(['price', 'date'], sel)
+    print(sel)
     
     # Update Data
     
