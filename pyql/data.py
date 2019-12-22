@@ -163,17 +163,17 @@ class table:
             for k,v in self.translation.items():
                 if col.type == v:
                     if len(cols) > 1:
-                        cols = cols + ', '
+                        cols = f'{cols}, '
                     if cName == self.prim_key and (k=='text' or k=='blob'):
-                        cols = cols + '%s %s'%(col.name, 'VARCHAR(36)')
+                        cols = f'{cols}{col.name} VARCHAR(36)'
                     else:
-                        cols = cols + '%s %s'%(col.name, k.upper())
+                        cols = f'{cols}{col.name} {k.upper()}'
                     if cName == self.prim_key:
-                        cols = cols + ' PRIMARY KEY'                    
+                        cols = f'{cols} PRIMARY KEY'                    
                     if col.mods is not None:
-                        cols = cols + ' %s'%(col.mods)
+                        cols = f'{cols} {col.mods}'
         cols = cols + ' )'
-        schema = """CREATE TABLE {name} {cols}""".format(name = self.name, cols=cols)
+        schema = f"""CREATE TABLE {self.name} {cols}"""
         return schema
     def create_schema(self):
         self.database.run(self.get_schema())
@@ -181,25 +181,46 @@ class table:
         where_sel = ''
         index = 0
         if 'where' in kw:
-            for k,v in kw['where'].items():
-                assert k in self.columns, f'{k} is not a valid column in table {self.name}'
+            for cName,v in kw['where'].items():
+                assert cName in self.columns, f'{cName} is not a valid column in table {self.name}'
+                if self.columns[cName].type == bool:
+                    try:
+                        kw['where'][cName] = bool(int(kw['where'][cName])) if self.database.type == 'mysql' else int(bool(int(kw['where'][cName])))
+                    except:
+                        #Input is string
+                        if 'true' in kw[cName].lower():
+                            kw['where'][cName] = True if self.database.type == 'mysql' else 1
+                        elif 'false' in kw[cName].lower():
+                            kw['where'][cName] = False if self.database.type == 'mysql' else 0
+                        else:
+                            print(f"Unsupported value {kw[cName]} provide for column type {col.type}")
+                            del(kw['where'][cName])
+                            continue
+            for cName,v in kw['where'].items():
                 if index < 1:
                     where_sel = "WHERE {col}={val}".format(
-                        col = k,
-                        val = v if self.columns[k].type is not str else "'"+v+"'"
+                        col = cName,
+                        val = v if self.columns[cName].type is not str else "'"+v+"'"
                     )
                     index+=1
                 else:
                     where_sel = where_sel + " AND {col}={val}".format(
-                        col = k,
-                        val = v if self.columns[k].type is not str else "'"+v+"'"
+                        col = cName,
+                        val = v if self.columns[cName].type is not str else "'"+v+"'"
                     )
+        print(where_sel)
         return where_sel
-
+        """
         if 'where' in kw:
-            assert kw['where'][0] in self.columns, "%s is not a valid column in table within 'where' statement %s"%(kw['where'][0], self.name)
-            where_sel = ' ' + 'WHERE %s=%s'%(kw['where'][0], kw['where'][1] if self.columns[kw['where'][0]].type is not str else "'" +kw['where'][1] + "'")
+            assert kw['where'][0] in self.columns, f"{kw['where'][0]} is not a valid column in table within 'where' statement {self.name}"
+            #where_sel = ' ' + 'WHERE %s=%s'%(kw['where'][0], kw['where'][1] if self.columns[kw['where'][0]].type is not str else "'" +kw['where'][1] + "'")
+            if self.columns[kw['where'][0]].type == bool:
+
+            else:
+                value = kw['where'][1] if self.columns[kw['where'][0]].type is not str else f"'{kw['where'][1]}'"
+            where_sel = f" WHERE {kw['where'][0]}={value}"
         return where_sel
+        """
 
     def select(self, *selection, **kw):
         """
@@ -282,10 +303,11 @@ class table:
                 print(f"Value provided for {cName} is not of the correct {col.type} type or could not be converted")
                 return
             if len(cols) > 2:
-                cols = cols + ', '
-                vals = vals + ', '
-            cols = cols + cName
-            vals = vals + str(kw[cName] if col.type is not str else '"' + kw[cName] + '"' )
+                cols = f'{cols}, '
+                vals = f'{vals}, '
+            cols = f'{cols}{cName}'
+            newVal = str(kw[cName] if col.type is not str else f'"{kw[cName]}"')
+            vals = f'{vals}{newVal}'
 
         cols = cols + ')'
         vals = vals + ')'
@@ -307,12 +329,28 @@ class table:
                 print("Value provided for %s is not of the correct %s type or could not be converted"%(cName, col.type))
                 return
         cols_to_set = ''
-        for k,v in kw.items():
-            if k.lower() == 'where':
+        for cName,cVal in kw.items():
+            if cName.lower() == 'where':
                 continue
             if len(cols_to_set) > 1:
-                cols_to_set = cols_to_set + ', '
-            cols_to_set = cols_to_set + '%s = %s'%(k,v if self.columns[k].type is not str else "'"+ v + "'")
+                cols_to_set = f'{cols_to_set}, '
+            if not self.columns[cName].type == bool:
+                columnValue = cVal if self.columns[cName].type is not str else f"'{cVal}'"
+                cols_to_set = f'{cols_to_set}{cName} = {columnValue}'
+            else:
+                try:
+                    boolValue = bool(int(kw[cName])) if self.database.type == 'mysql' else int(bool(int(kw[cName])))
+                except:
+                    #Input is string
+                    if 'true' in kw[cName].lower():
+                        boolValue = True if self.database.type == 'mysql' else 1
+                    elif 'false' in kw[cName].lower():
+                        boolValue = False if self.database.type == 'mysql' else 0
+                    else:
+                        print(f"Unsupported value {kw[cName]} provide for column type {col.type}")
+                        continue
+                cols_to_set = f'{cols_to_set}{cName} = {boolValue}'
+
         where_sel = self.__where(kw)
         query = 'UPDATE {name} SET {cols_vals} {where}'.format(
             name=self.name,

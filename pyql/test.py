@@ -38,8 +38,8 @@ def test(db):
             ('date', str),
             ('trans', str),
             ('symbol', str),
-            ('qty', float),
-            ('price', str),
+            ('qty', int),
+            ('price', float),
             ('afterHours', bool)
         ], 
         'order_num' # Primary Key 
@@ -49,7 +49,7 @@ def test(db):
     for col in colNames:
         assert col in db.tables['stocks'].columns
 
-    trade = {'date': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': 35.14, 'afterHours': True}
+    trade = {'date': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100, 'price': 35.14, 'afterHours': True}
     db.tables['stocks'].insert(**trade)
     #    OR
     # db.tables['stocks'].insert(
@@ -94,7 +94,10 @@ def test(db):
     
     # Update Data
     
-    db.tables['stocks'].update(symbol='NTAP',trans='SELL', where={'order_num': 1})
+    db.tables['stocks'].update(
+        symbol='NTAP',trans='SELL',
+        afterHours=False, qty=101, 
+        where={'order_num': 1, 'afterHours': True})
     sel = db.tables['stocks'].select('*', where={'order_num': 1})[0]
     print(sel)
     assert sel['trans'] == 'SELL' and sel['symbol'] == 'NTAP', f"values not correctly updated"
@@ -103,7 +106,7 @@ def test(db):
 
     # Delete Data 
 
-    db.tables['stocks'].delete(where={'order_num': 1})
-    sel = db.tables['stocks'].select('*', where={'order_num': 1})
+    db.tables['stocks'].delete(where={'order_num': 1, 'afterHours': False})
+    sel = db.tables['stocks'].select('*', where={'order_num': 1, 'afterHours': False})
     print(sel)
     assert len(sel) < 1, "delete should have removed order_num 1"

@@ -97,7 +97,7 @@ Requires key-value pairs - may be input using dict or the following
         
 ### Select Data
 
-        sel = db.tables['stocks'].select('*', where=('symbol','RHAT'))
+        sel = db.tables['stocks'].select('*', where={'symbol': 'RHAT'})
         print(sel)
     
 Result:
@@ -106,8 +106,8 @@ Result:
     
 ### Update Data
     
-        db.tables['stocks'].update(symbol='NTAP',trans='SELL', where=('order_num', 1))
-        sel = db.tables['stocks'].select('*', where=('order_num', 1))
+        db.tables['stocks'].update(symbol='NTAP',trans='SELL', where={'order_num': 1})
+        sel = db.tables['stocks'].select('*', where={'order_num': 1})
         
 Result:
 
