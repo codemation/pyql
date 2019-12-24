@@ -1,4 +1,4 @@
-import data, os, unittest
+import data, os, unittest, json
 
 
 class TestData(unittest.TestCase):
@@ -49,7 +49,10 @@ def test(db):
     for col in colNames:
         assert col in db.tables['stocks'].columns
 
-    trade = {'date': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100, 'price': 35.14, 'afterHours': True}
+    # JSON Load test
+    txData = {'type': 'BUY', 'condition': {'limit': '36.00', 'time': 'EndOfTradingDay'}}
+
+    trade = {'date': '2006-01-05', 'trans': txData, 'symbol': 'RHAT', 'qty': 100, 'price': 35.14, 'afterHours': True}
     db.tables['stocks'].insert(**trade)
     #    OR
     # db.tables['stocks'].insert(
@@ -93,14 +96,16 @@ def test(db):
     print(sel)
     
     # Update Data
+    txOld = {'type': 'BUY', 'condition': {'limit': '36.00', 'time': 'EndOfTradingDay'}}
+    txData['type'] = 'SELL'
     
     db.tables['stocks'].update(
-        symbol='NTAP',trans='SELL',
+        symbol='NTAP',trans=txData,
         afterHours=False, qty=101, 
-        where={'order_num': 1, 'afterHours': True})
+        where={'order_num': 1, 'afterHours': True, 'trans': txOld})
     sel = db.tables['stocks'].select('*', where={'order_num': 1})[0]
     print(sel)
-    assert sel['trans'] == 'SELL' and sel['symbol'] == 'NTAP', f"values not correctly updated"
+    assert sel['trans']['type'] == 'SELL' and sel['symbol'] == 'NTAP', f"values not correctly updated"
 
     print(sel)
 

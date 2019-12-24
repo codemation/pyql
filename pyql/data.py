@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from collections import namedtuple
+import json
 
 #Used for grouping columns with database class
 col = namedtuple('col', ['name', 'type', 'mods'])
@@ -177,50 +178,47 @@ class table:
         return schema
     def create_schema(self):
         self.database.run(self.get_schema())
+    def _process_input(self, kw):
+        for cName, col in self.columns.items():
+            if cName in kw:
+                if not col.type == bool:
+                    #JSON handling
+                    if col.type == str and type(kw[cName]) == dict:
+                        kw[cName] = f"'{col.type(json.dumps(kw[cName]))}'"
+                        continue
+                    kw[cName] = col.type(kw[cName])
+                else:
+                    try:
+                        kw[cName] = col.type(int(kw[cName])) if self.database.type == 'mysql' else int(col.type(int(kw[cName])))
+                    except:
+                        #Bool Input is string
+                        if 'true' in kw[cName].lower():
+                            kw[cName] = True if self.database.type == 'mysql' else 1
+                        elif 'false' in kw[cName].lower():
+                            kw[cName] = False if self.database.type == 'mysql' else 0
+                        else:
+                            print(f"Unsupported value {kw[cName]} provide for column type {col.type}")
+                            del(kw[cName])
+                            continue
+        return kw
+
     def __where(self, kw):
         where_sel = ''
         index = 0
         if 'where' in kw:
+            kw['where'] = self._process_input(kw['where'])
             for cName,v in kw['where'].items():
                 assert cName in self.columns, f'{cName} is not a valid column in table {self.name}'
-                if self.columns[cName].type == bool:
-                    try:
-                        kw['where'][cName] = bool(int(kw['where'][cName])) if self.database.type == 'mysql' else int(bool(int(kw['where'][cName])))
-                    except:
-                        #Input is string
-                        if 'true' in kw[cName].lower():
-                            kw['where'][cName] = True if self.database.type == 'mysql' else 1
-                        elif 'false' in kw[cName].lower():
-                            kw['where'][cName] = False if self.database.type == 'mysql' else 0
-                        else:
-                            print(f"Unsupported value {kw[cName]} provide for column type {col.type}")
-                            del(kw['where'][cName])
-                            continue
+            andValue = 'WHERE '
             for cName,v in kw['where'].items():
-                if index < 1:
-                    where_sel = "WHERE {col}={val}".format(
-                        col = cName,
-                        val = v if self.columns[cName].type is not str else "'"+v+"'"
-                    )
-                    index+=1
+                #json check
+                if self.columns[cName].type == str and '{"' and '}' in v:
+                    where_sel = f"{where_sel}{andValue}{cName}={v}"
                 else:
-                    where_sel = where_sel + " AND {col}={val}".format(
-                        col = cName,
-                        val = v if self.columns[cName].type is not str else "'"+v+"'"
-                    )
-        print(where_sel)
+                    val = v if self.columns[cName].type is not str else "'"+v+"'"
+                    where_sel = f"{where_sel}{andValue}{cName}={val}"
+                andValue = ' AND '
         return where_sel
-        """
-        if 'where' in kw:
-            assert kw['where'][0] in self.columns, f"{kw['where'][0]} is not a valid column in table within 'where' statement {self.name}"
-            #where_sel = ' ' + 'WHERE %s=%s'%(kw['where'][0], kw['where'][1] if self.columns[kw['where'][0]].type is not str else "'" +kw['where'][1] + "'")
-            if self.columns[kw['where'][0]].type == bool:
-
-            else:
-                value = kw['where'][1] if self.columns[kw['where'][0]].type is not str else f"'{kw['where'][1]}'"
-            where_sel = f" WHERE {kw['where'][0]}={value}"
-        return where_sel
-        """
 
     def select(self, *selection, **kw):
         """
@@ -259,7 +257,10 @@ class table:
         for row in rows:
             r_dict = {}
             for i,v in enumerate(row):
-                r_dict[keys[i]] = v if not self.columns[keys[i]].type == bool else bool(v)
+                if self.columns[keys[i]].type == str and '{"' and '}' in v:
+                    r_dict[keys[i]] = json.loads(v)
+                else:
+                    r_dict[keys[i]] = v if not self.columns[keys[i]].type == bool else bool(v)
             toReturn.append(r_dict)
         return toReturn
     def insert(self, **kw):
@@ -267,7 +268,7 @@ class table:
             Usage:
                     db.tables['stocks_new_tb2'].insert(
                         date='2006-01-05',
-                        trans='BUY',
+                        trans={'type': 'BUY', 'conditions': {'limit': '36.00', 'time': 'EndOfTradingDay'}, 'tradeTimes':['16:30:00.00','16:30:01.00']},
                         symbol='RHAT',
                         qty=100.0,
                         price=35.14)
@@ -275,6 +276,9 @@ class table:
         cols = '('
         vals = '('
         #checking input kw's for correct value types
+
+        kw = self._process_input(kw)
+
         for cName, col in self.columns.items():
             if not cName in kw:
                 if not col.mods == None:
@@ -282,31 +286,15 @@ class table:
                         print(f'{cName} is a required field for INSERT in table {self.name}')
                         return
                 continue
-            try:
-                if not col.type == bool:
-                    kw[cName] = col.type(kw[cName])
-                else:
-                    try:
-                        kw[cName] = col.type(int(kw[cName])) if self.database.type == 'mysql' else int(col.type(int(kw[cName])))
-                    except:
-                        #Input is string
-                        if 'true' in kw[cName].lower():
-                            kw[cName] = True if self.database.type == 'mysql' else 1
-                        elif 'false' in kw[cName].lower():
-                            kw[cName] = False if self.database.type == 'mysql' else 0
-                        else:
-                            print(f"Unsupported value {kw[cName]} provide for column type {col.type}")
-                            del(kw[cName])
-                            continue
-                    
-            except:
-                print(f"Value provided for {cName} is not of the correct {col.type} type or could not be converted")
-                return
             if len(cols) > 2:
                 cols = f'{cols}, '
                 vals = f'{vals}, '
             cols = f'{cols}{cName}'
-            newVal = str(kw[cName] if col.type is not str else f'"{kw[cName]}"')
+            #json handling
+            if col.type == str and '{"' and '}' in kw[cName]:
+                newVal = kw[cName]
+            else:
+                newVal = str(kw[cName] if col.type is not str else f'"{kw[cName]}"')
             vals = f'{vals}{newVal}'
 
         cols = cols + ')'
@@ -320,36 +308,24 @@ class table:
             Usage:
                 db.tables['stocks'].update(symbol='NTAP',trans='SELL', where=('order_num', 1))
         """
-        for cName, col in self.columns.items():
-            if not cName in kw:
-                continue
-            try:
-                kw[cName] = col.type(kw[cName])
-            except:
-                print("Value provided for %s is not of the correct %s type or could not be converted"%(cName, col.type))
-                return
+        try:
+            kw = self._process_input(kw)
+        except Exception as e:
+            print(e)
+
+  
         cols_to_set = ''
         for cName,cVal in kw.items():
             if cName.lower() == 'where':
                 continue
             if len(cols_to_set) > 1:
                 cols_to_set = f'{cols_to_set}, '
-            if not self.columns[cName].type == bool:
-                columnValue = cVal if self.columns[cName].type is not str else f"'{cVal}'"
-                cols_to_set = f'{cols_to_set}{cName} = {columnValue}'
+            #JSON detection
+            if self.columns[cName].type == str and '{"' and '}' in cVal:
+                columnValue = cVal
             else:
-                try:
-                    boolValue = bool(int(kw[cName])) if self.database.type == 'mysql' else int(bool(int(kw[cName])))
-                except:
-                    #Input is string
-                    if 'true' in kw[cName].lower():
-                        boolValue = True if self.database.type == 'mysql' else 1
-                    elif 'false' in kw[cName].lower():
-                        boolValue = False if self.database.type == 'mysql' else 0
-                    else:
-                        print(f"Unsupported value {kw[cName]} provide for column type {col.type}")
-                        continue
-                cols_to_set = f'{cols_to_set}{cName} = {boolValue}'
+                columnValue = cVal if self.columns[cName].type is not str else f"'{cVal}'"
+            cols_to_set = f'{cols_to_set}{cName} = {columnValue}'
 
         where_sel = self.__where(kw)
         query = 'UPDATE {name} SET {cols_vals} {where}'.format(
@@ -366,7 +342,6 @@ class table:
                 db.tables['stocks'].delete(all_rows=True)
         """
         where_sel = self.__where(kw)
-        print(len(where_sel) < 1)
         if len(where_sel) < 1:
             assert all_rows, "where statment is required with DELETE, otherwise specify .delete(all_rows=True)"
         query = "DELETE FROM {name} {where}".format(
@@ -379,65 +354,3 @@ class table:
 # - Add suppport for foreign keys & joins with queries
 # - Determine if views are needed and add support
 # - Support for transactions?
-
-def run_mysql_test():
-    import mysql.connector
-    db = database(
-        mysql.connector.connect,
-        database='titanic',
-        user='mysqluser',
-        password='abcd1234',
-        host='192.168.122.120',
-        port='32043',
-        type='mysql'
-        )
-    test(db)
-def run_sqlite_test(dbName="testdb"):
-    import sqlite3
-    db = database(
-        sqlite3.connect, 
-        database=dbName
-        )
-    test(db)
-
-def test(db):
-
-    db.create_table(
-        'stocks', 
-        [    
-            ('order_num', int, 'AUTO_INCREMENT'if db.type == 'mysql' else 'AUTOINCREMENT'),
-            ('date', str),
-            ('trans', str),
-            ('symbol', str),
-            ('qty', float),
-            ('price', str),
-            ('afterHours', bool)
-        ], 
-        'order_num' # Primary Key 
-    )
-    print(db.run('describe stocks'))
-    trade = {'data': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': 35.14, 'afterHours': True if db.type == 'myql' else 1}
-    db.tables['stocks'].insert(**trade)
-    #    OR
-    db.tables['stocks'].insert(
-        date='2006-01-05', # Note order_num was not required as auto_increment was specified
-        trans='BUY',
-        symbol='NTAP',
-        qty=100.0,
-        price=35.14,
-        afterHours=True
-    )
-    # Select Data
-
-    sel = db.tables['stocks'].select('*', where={'symbol':'RHAT'})
-    print(sel)
-    
-    # Update Data
-    
-    db.tables['stocks'].update(symbol='NTAP',trans='SELL', where={'order_num': 1})
-    sel = db.tables['stocks'].select('*', where={'order_num': 1})
-    print(sel)
-
-    # Delete Data 
-
-    db.tables['stocks'].delete(where={'order_num': 1})
