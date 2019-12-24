@@ -213,7 +213,7 @@ class table:
             for cName,v in kw['where'].items():
                 eq = '=' if not v == 'NULL' else ' IS '
                 #json check
-                if self.columns[cName].type == str and '{"' and '}' in v:
+                if v == 'NULL' or self.columns[cName].type == str and '{"' and '}' in v:
                     where_sel = f"{where_sel}{andValue}{cName}{eq}{v}"
                 else:
                     val = v if self.columns[cName].type is not str else "'"+v+"'"
@@ -322,7 +322,7 @@ class table:
             if len(cols_to_set) > 1:
                 cols_to_set = f'{cols_to_set}, '
             #JSON detection
-            if self.columns[cName].type == str and '{"' and '}' in cVal:
+            if cVal == 'NULL' or self.columns[cName].type == str and '{"' and '}' in cVal:
                 columnValue = cVal
             else:
                 columnValue = cVal if self.columns[cName].type is not str else f"'{cVal}'"
