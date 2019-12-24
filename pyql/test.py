@@ -99,7 +99,7 @@ def test(db):
 
     # Partial insert
 
-    partialTrade = {'date': '2006-01-05', 'trans': txData, 'price': 35.14, 'afterHours': True}
+    partialTrade = {'date': '2006-01-05', 'trans': txData, 'price': 35.16, 'afterHours': True}
 
     db.tables['stocks'].insert(**partialTrade)
 
@@ -107,6 +107,11 @@ def test(db):
     sel = db.tables['stocks'].select('*')
     print(sel)
     check_sel('*', sel)
+
+    # * select NULL check # 
+    sel = db.tables['stocks'].select('*', where={'qty': None})
+    print(sel)
+    assert len(sel) > 0, "we should find at least 1 row with a NULL qty" 
     
     # * select + where # 
     sel = db.tables['stocks'].select('*', where={'symbol':'RHAT'})
@@ -133,6 +138,18 @@ def test(db):
     sel = db.tables['stocks'].select('*', where={'order_num': 1})[0]
     print(sel)
     assert sel['trans']['type'] == 'SELL' and sel['symbol'] == 'NTAP', f"values not correctly updated"
+
+    # update data - use None Value
+    db.tables['stocks'].update(
+        symbol=None,trans=txData,
+        afterHours=False, qty=101, 
+        where={'qty': 101})
+
+    # * select NULL check # 
+    sel = db.tables['stocks'].select('*', where={'qty': 101, 'symbol': None})
+    print(sel)
+    assert len(sel) > 0, "we should find at least 1 row with a NULL symbol" 
+
 
     print(sel)
 

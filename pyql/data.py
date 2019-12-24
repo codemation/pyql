@@ -186,7 +186,7 @@ class table:
                     if col.type == str and type(kw[cName]) == dict:
                         kw[cName] = f"'{col.type(json.dumps(kw[cName]))}'"
                         continue
-                    kw[cName] = col.type(kw[cName])
+                    kw[cName] = col.type(kw[cName]) if not kw[cName] == None else 'NULL'
                 else:
                     try:
                         kw[cName] = col.type(int(kw[cName])) if self.database.type == 'mysql' else int(col.type(int(kw[cName])))
@@ -211,12 +211,13 @@ class table:
                 assert cName in self.columns, f'{cName} is not a valid column in table {self.name}'
             andValue = 'WHERE '
             for cName,v in kw['where'].items():
+                eq = '=' if not v == 'NULL' else ' IS '
                 #json check
                 if self.columns[cName].type == str and '{"' and '}' in v:
-                    where_sel = f"{where_sel}{andValue}{cName}={v}"
+                    where_sel = f"{where_sel}{andValue}{cName}{eq}{v}"
                 else:
                     val = v if self.columns[cName].type is not str else "'"+v+"'"
-                    where_sel = f"{where_sel}{andValue}{cName}={val}"
+                    where_sel = f"{where_sel}{andValue}{cName}{eq}{val}"
                 andValue = ' AND '
         return where_sel
 
