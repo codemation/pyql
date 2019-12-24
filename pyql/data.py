@@ -249,7 +249,7 @@ class table:
         rows = self.database.get(query)
 
         #dictonarify each row result and return
-        if selection is not '*':
+        if not selection == '*':
             keys = selection.split(',') if ',' in selection else selection.split(' ')
         else:
             keys = list(self.columns.keys())
@@ -257,8 +257,8 @@ class table:
         for row in rows:
             r_dict = {}
             for i,v in enumerate(row):
-                if self.columns[keys[i]].type == str and '{"' and '}' in v:
-                    r_dict[keys[i]] = json.loads(v)
+                if not v == None and self.columns[keys[i]].type == str and '{"' and '}' in v:
+                        r_dict[keys[i]] = json.loads(v)
                 else:
                     r_dict[keys[i]] = v if not self.columns[keys[i]].type == bool else bool(v)
             toReturn.append(r_dict)

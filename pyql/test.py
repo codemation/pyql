@@ -29,6 +29,22 @@ class TestData(unittest.TestCase):
         test(db)
 
 def test(db):
+    def check_sel(requested, selection):
+        requestItems = []
+        if requested == '*':
+            requestItems = trade.keys()
+        else:
+            for request in requested:
+                assert request in trade, f'{request} is not a valid column in {trade}'
+                requestItems.append(request)
+        
+        for col, value in trade.items():
+            if col in requestItems:
+                assert len(selection) > 0, f"selection should be greater than lenth 0, data was inserted"
+                assert col in selection[0], f"missing column '{col}' in select return"
+                assert str(value) == str(sel[0][col]), f"value {selection[0][col]} returned from select is not what was inserted {value}."
+
+
     assert str(type(db)) == "<class 'data.database'>", "failed to create data.database object)"
     db.run('drop table stocks')
     db.create_table(
@@ -53,6 +69,12 @@ def test(db):
     txData = {'type': 'BUY', 'condition': {'limit': '36.00', 'time': 'EndOfTradingDay'}}
 
     trade = {'date': '2006-01-05', 'trans': txData, 'symbol': 'RHAT', 'qty': 100, 'price': 35.14, 'afterHours': True}
+
+    # pre insert * select # 
+    sel = db.tables['stocks'].select('*')
+    assert not len(sel) > 0, "no values should exist yet"
+
+
     db.tables['stocks'].insert(**trade)
     #    OR
     # db.tables['stocks'].insert(
@@ -67,21 +89,26 @@ def test(db):
 
     # Select Data
 
-    def check_sel(requested, selection):
-        requestItems = []
-        if requested == '*':
-            requestItems = trade.keys()
-        else:
-            for request in requested:
-                assert request in trade, f'{request} is not a valid colun in {trade}'
-                requestItems.append(request)
-        
-        for col, value in trade.items():
-            if col in requestItems:
-                assert len(selection) > 0, f"selection should be greater than lenth 0, data was inserted"
-                assert col in selection[0], f"missing column '{col}' in select return"
-                assert str(value) == str(sel[0][col]), f"value {selection[0][col]} returned from select is not what was inserted {value}."
+
+    
     # * select # 
+    sel = db.tables['stocks'].select('*')
+    print(sel)
+    check_sel('*', sel)
+
+
+    # Partial insert
+
+    partialTrade = {'date': '2006-01-05', 'trans': txData, 'price': 35.14, 'afterHours': True}
+
+    db.tables['stocks'].insert(**partialTrade)
+
+    # * select # 
+    sel = db.tables['stocks'].select('*')
+    print(sel)
+    check_sel('*', sel)
+    
+    # * select + where # 
     sel = db.tables['stocks'].select('*', where={'symbol':'RHAT'})
     print(sel)
     check_sel('*', sel)
