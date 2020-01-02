@@ -292,10 +292,10 @@ class table:
                 vals = f'{vals}, '
             cols = f'{cols}{cName}'
             #json handling
-            if col.type == str and '{"' and '}' in kw[cName]:
+            if kw[cName]== 'NULL' or kw[cName] == None or col.type == str and '{"' and '}' in kw[cName]:
                 newVal = kw[cName]
             else:
-                newVal = str(kw[cName] if col.type is not str else f'"{kw[cName]}"')
+                newVal = kw[cName] if col.type is not str else f'"{kw[cName]}"'
             vals = f'{vals}{newVal}'
 
         cols = cols + ')'

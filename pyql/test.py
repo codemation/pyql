@@ -99,7 +99,7 @@ def test(db):
 
     # Partial insert
 
-    partialTrade = {'date': '2006-01-05', 'trans': txData, 'price': 35.16, 'afterHours': True}
+    partialTrade = {'date': '2006-01-05', 'trans': txData, 'price': 35.16,'qty': None, 'afterHours': True}
 
     db.tables['stocks'].insert(**partialTrade)
 
