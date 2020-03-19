@@ -116,19 +116,19 @@ class database:
                 self.create_table(table[0], colsInTable, PrimaryKey)
     def create_table(self,name, columns, prim_key=None):
         """
-            Usage:
-                    db.create_table(
-                        'stocks_new_tb2', 
-                        [
-                            ('order_num', int, 'AUTOINCREMENT'),
-                            ('date', str, None),
-                            ('trans', str, None),
-                            ('symbol', str, None),
-                            ('qty', float, None),
-                            ('price', str, None)
-                            ], 
-                        'order_num' # Primary Key
-                    )
+        Usage:
+            db.create_table(
+                'stocks_new_tb2', 
+                [
+                    ('order_num', int, 'AUTOINCREMENT'),
+                    ('date', str, None),
+                    ('trans', str, None),
+                    ('symbol', str, None),
+                    ('qty', float, None),
+                    ('price', str, None)
+                    ], 
+                'order_num' # Primary Key
+            )
         """
         #Convert tuple columns -> named_tuples
         cols = []
@@ -223,12 +223,17 @@ class table:
 
     def select(self, *selection, **kw):
         """
-            Usage: returns list of dictionaries for each selection in each row. 
-                sel = db.tables['stocks_new_tb2'].select('order_num','symbol', where={'trans': 'BUY'})
-                    OR
-                sel = db.tables['stocks_new_tb2'].select('*')
-                for r in sel:
-                    print(r)
+        Usage: returns list of dictionaries for each selection in each row. 
+            tb = db.tables['stocks_new_tb2']
+
+            sel = tb.select('order_num',
+                            'symbol', 
+                            where={'trans': 'BUY', 'qty': 100})
+            sel = tb.select('*')
+            # Iterate through table
+            sel = [row for row in tb]
+            # Using Primary key only
+            sel = tb[0] # select * from <table> where <table_prim_key> = <val>
         """
         if '*' in selection:
             selection = '*'
@@ -266,13 +271,16 @@ class table:
         return toReturn
     def insert(self, **kw):
         """
-            Usage:
-                    db.tables['stocks_new_tb2'].insert(
-                        date='2006-01-05',
-                        trans={'type': 'BUY', 'conditions': {'limit': '36.00', 'time': 'EndOfTradingDay'}, 'tradeTimes':['16:30:00.00','16:30:01.00']},
-                        symbol='RHAT',
-                        qty=100.0,
-                        price=35.14)
+        Usage:
+            db.tables['stocks_new_tb2'].insert(
+                date='2006-01-05',
+                trans={
+                    'type': 'BUY', 
+                    'conditions': {'limit': '36.00', 'time': 'EndOfTradingDay'}, #JSON
+                'tradeTimes':['16:30:00.00','16:30:01.00']}, # JSON
+                symbol='RHAT', 
+                qty=100.0,
+                price=35.14)
         """
         cols = '('
         vals = '('
@@ -306,8 +314,8 @@ class table:
         self.database.run(query)
     def update(self,**kw):
         """
-            Usage:
-                db.tables['stocks'].update(symbol='NTAP',trans='SELL', where=('order_num', 1))
+        Usage:
+            db.tables['stocks'].update(symbol='NTAP',trans='SELL', where={'order_num': 1})
         """
         try:
             kw = self._process_input(kw)
@@ -338,9 +346,9 @@ class table:
         self.database.run(query)
     def delete(self, all_rows=False, **kw):
         """
-            Usage:
-                db.tables['stocks'].delete(where=('order_num', 1))
-                db.tables['stocks'].delete(all_rows=True)
+        Usage:
+            db.tables['stocks'].delete(where={'order_num': 1})
+            db.tables['stocks'].delete(all_rows=True)
         """
         where_sel = self.__where(kw)
         if len(where_sel) < 1:
@@ -350,6 +358,26 @@ class table:
             where=where_sel
         )
         self.database.run(query)
+
+    def __getitem__(self, keyVal):
+        val = self.select('*', where={self.prim_key: keyVal})
+        if len(val) > 0:
+            return val[0]
+        return None
+    def __setitem__(self, key, values):
+        if not self[key] == None:
+            self.update(**values, where={self.prim_key: key})
+        if len(values) == len(self.columns): 
+            self.insert(**values)
+    def __contains__(self, key):
+        if self[key] == None:
+            return False
+        return True
+    def __iter__(self):
+        def gen():
+            for row in self.select('*'):
+                yield row
+        return gen()
 #   TOODOO:
 # - Add support for creating column indexes per tables
 # - Add suppport for foreign keys & joins with queries

@@ -4,11 +4,11 @@ import data, os, unittest, json
 class TestData(unittest.TestCase):
     def test_run_mysql_test(self):
         import mysql.connector
-        os.environ['DB_USER'] = 'testuser'
+        os.environ['DB_USER'] = 'josh'
         os.environ['DB_PASSWORD'] = 'abcd1234'
-        os.environ['DB_HOST'] = '172.17.0.1' if not 'DB_HOST' in os.environ else os.environ['DB_HOST']
+        os.environ['DB_HOST'] = 'localhost' if not 'DB_HOST' in os.environ else os.environ['DB_HOST']
         os.environ['DB_PORT'] = '3306'
-        os.environ['DB_NAME'] = 'testdb'
+        os.environ['DB_NAME'] = 'joshdb'
         os.environ['DB_TYPE'] = 'mysql'
 
         env = ['DB_USER','DB_PASSWORD','DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_TYPE']
@@ -96,6 +96,10 @@ def test(db):
     print(sel)
     check_sel('*', sel)
 
+    # Iter Check
+    sel = [row for row in db.tables['stocks']]
+    check_sel('*', sel)
+
 
     # Partial insert
 
@@ -139,6 +143,15 @@ def test(db):
     print(sel)
     assert sel['trans']['type'] == 'SELL' and sel['symbol'] == 'NTAP', f"values not correctly updated"
 
+
+    # Update Data via setItem
+    db.tables['stocks'][1] = {'symbol': 'NTNX', 'trans': {'type': 'BUY'}}
+    # Select via getItem
+    sel = db.tables['stocks'][1]
+    print(sel)
+    assert sel['trans']['type'] == 'BUY' and sel['symbol'] == 'NTNX', f"values not correctly updated"
+
+
     # update data - use None Value
     db.tables['stocks'].update(
         symbol=None,trans=txData,
@@ -150,7 +163,8 @@ def test(db):
     print(sel)
     assert len(sel) > 0, "we should find at least 1 row with a NULL symbol" 
 
-
+    # Check 'in' functioning
+    assert 1 in db.tables['stocks'], "order 1 should still exist"
     print(sel)
 
     # Delete Data 
@@ -159,3 +173,6 @@ def test(db):
     sel = db.tables['stocks'].select('*', where={'order_num': 1, 'afterHours': False})
     print(sel)
     assert len(sel) < 1, "delete should have removed order_num 1"
+
+    # Check 'in' functioning
+    assert not 1 in db.tables['stocks'], "order 1 should not still exist"
