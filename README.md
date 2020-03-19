@@ -50,73 +50,118 @@ See DB documentation for reference.
             )
     
 ### Table Create
-   Requires List of at least 2 item tuples, max 3
-   ('column name', str|int|float|byte, None|AUTO_INCREMENT|NOT NULL|OTHERS(not listed)
+Requires List of at least 2 item tuples, max 3
+
+    ('ColumnName', type, 'modifiers')
+        ColumnName - str - database column name exclusions apply
+        types: str, int, float, byte, bool, None # JSON dumpable dicts fall under str types
+        modifiers: NOT NULL, UNIQUE, AUTO_INCREMENT
+    Note: constraints are not validated by pyql but at db, so if modifier is supported it will be added when table is created.
+
+    # Table Create    
+    db.create_table(
+        'stocks', 
+        [    
+            ('order_num', int, 'AUTO_INCREMENT'),
+            ('date', str),
+            ('trans', str),
+            ('symbol', str),
+            ('qty', float),
+            ('price', str)
+        ], 
+        'order_num' # Primary Key 
+    )
     
-        db.create_table(
-            'stocks', 
-            [    
-                ('order_num', int, 'AUTO_INCREMENT'),
-                ('date', str),
-                ('trans', str),
-                ('symbol', str),
-                ('qty', float),
-                ('price', str)
-            ], 
-            'order_num' # Primary Key 
-        )
-   Result:
-    
-        mysql> describe stocks;
-        +-----------+---------+------+-----+---------+----------------+
-        | Field     | Type    | Null | Key | Default | Extra          |
-        +-----------+---------+------+-----+---------+----------------+
-        | order_num | int(11) | NO   | PRI | NULL    | auto_increment |
-        | date      | text    | YES  |     | NULL    |                |
-        | trans     | text    | YES  |     | NULL    |                |
-        | symbol    | text    | YES  |     | NULL    |                |
-        | qty       | double  | YES  |     | NULL    |                |
-        | price     | text    | YES  |     | NULL    |                |
-        +-----------+---------+------+-----+---------+----------------+
-        6 rows in set (0.00 sec)
+    mysql> describe stocks;
+    +-----------+---------+------+-----+---------+----------------+
+    | Field     | Type    | Null | Key | Default | Extra          |
+    +-----------+---------+------+-----+---------+----------------+
+    | order_num | int(11) | NO   | PRI | NULL    | auto_increment |
+    | date      | text    | YES  |     | NULL    |                |
+    | trans     | text    | YES  |     | NULL    |                |
+    | condition | text    | YES  |     | NULL    |                |
+    | symbol    | text    | YES  |     | NULL    |                |
+    | qty       | double  | YES  |     | NULL    |                |
+    | price     | text    | YES  |     | NULL    |                |
+    +-----------+---------+------+-----+---------+----------------+
+    6 rows in set (0.00 sec)
     
 ### Insert Data
 Requires key-value pairs - may be input using dict or the following
+
+    tb = db.tables['stocks']
+
+    trade = {'date': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': 35.14}
+    tb.insert(**trade)
+    tb.insert(
+        date='2006-01-05', # Note order_num was not required as auto_increment was specified
+        trans='BUY',
+        symbol='RHAT',
+        qty=100.0,
+        price=35.14
+    )
+
+    # Special Data 
+    Columns of type string can hold JSON dump-able python dictionaries as JSON strings and are automatically converted back into dicts when read.
+
+    txData = {
+        'type': 'BUY', 
+        'condition': {'limit': '36.00', 'time': 'EndOfTradingDay'} #  Dict Value 
+        }
     
-        trade = {'date': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': 35.14}
-        db.tables['stocks'].insert(**trade)
-        
-        
-        db.tables['stocks'].insert(
-            date='2006-01-05', # Note order_num was not required as auto_increment was specified
-            trans='BUY',
-            symbol='RHAT',
-            qty=100.0,
-            price=35.14
-        )
         
 ### Select Data
+Use * for all columns
+Use col1,col2,col3 to select specific columns
 
-        sel = db.tables['stocks'].select('*', where={'symbol': 'RHAT'})
+    tb = db.tables['stocks']
+
+    # Bracket indexs can only be used for primary keys and return all column values 
+    sel = tb[0] # Select * from stocks where order_num = 1
+
+    # If using WHERE condition for non-primary key column, where={'col': <val>} is required
+    sel = tb.select('*', where={'symbol': 'RHAT'}) # select * from stocks where symbol = 'RHAT'
+
+    # Iterate through table - grab all rows
+    sel = [row for row in tb] # select * from stocks
+
+    In:
         print(sel)
-    
-Result:
-    
-        [{'order_num': 1, 'date': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': '35.14'}]
-    
+    Out:
+        [
+            {'order_num': 1, 'date': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': '35.14'},
+            {'order_num': 2, 'date': '2006-01-06', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': '35.14'},
+            ..
+        ]
+
+
 ### Update Data
-    
-        db.tables['stocks'].update(symbol='NTAP',trans='SELL', where={'order_num': 1})
-        sel = db.tables['stocks'].select('*', where={'order_num': 1})
-        
-Result:
 
-    db.tables['stocks'].update(symbol='NTAP',trans='SELL', where={'order_num': 1})
-    sel = db.tables['stocks'].select('*', where={'order_num': 1})
+    Define update values in-line or un-pack
 
-Result:
+        tb = db.tables['stocks']
 
-        [{'order_num': 1, 'date': '2006-01-05', 'trans': 'SELL', 'symbol': 'NTAP', 'qty': 100.0, 'price': '35.14'}]
+        # in-line
+        tb.update(
+            symbol='NTAP',trans='SELL', 
+            where={'order_num': 1})
+
+        is the same as 
+
+        # Un-Pack
+        toUpdate = {'symbol': 'NTAP', 'trans': 'SELL'}
+        where = {'order_num': 1}
+
+        tb.update(
+            **toUpdate,
+            where=where
+        )
+
+        is the same as 
+
+        # Primary-Key - Where [] 
+        tb[1] = toUpdate # Primary Key is assumed in brackets 
+        tb[1] = {'qty': 200}
 
 ### Delete Data 
 
