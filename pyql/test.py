@@ -61,6 +61,28 @@ def test(db):
         'order_num' # Primary Key 
     )
     assert 'stocks' in db.tables, "table creation failed"
+
+
+    db.run('drop table keystore')
+    db.create_table(
+        'keystore', 
+        [    
+            ('env', str, 'UNIQUE NOT NULL'),
+            ('val', str)
+        ], 
+        'env' # Primary Key 
+    )
+
+    assert 'keystore' in db.tables, "table creation failed"
+
+    ##
+
+    # single col insertion using tb[column] = columnValue
+    db.tables['keystore']['key1'] = 'value1'
+    assert 'key1' in db.tables['keystore'], "insertion failed using setitem"
+
+
+
     colNames = ['order_num', 'date', 'trans', 'symbol', 'qty', 'price', 'afterHours']
     for col in colNames:
         assert col in db.tables['stocks'].columns
@@ -99,6 +121,7 @@ def test(db):
     # Iter Check
     sel = [row for row in db.tables['stocks']]
     check_sel('*', sel)
+    print(f"iter check ")
 
 
     # Partial insert

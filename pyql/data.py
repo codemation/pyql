@@ -260,14 +260,15 @@ class table:
         else:
             keys = list(self.columns.keys())
         toReturn = []
-        for row in rows:
-            r_dict = {}
-            for i,v in enumerate(row):
-                if not v == None and self.columns[keys[i]].type == str and '{"' and '}' in v:
-                        r_dict[keys[i]] = json.loads(v)
-                else:
-                    r_dict[keys[i]] = v if not self.columns[keys[i]].type == bool else bool(v)
-            toReturn.append(r_dict)
+        if not rows == None:
+            for row in rows:
+                r_dict = {}
+                for i,v in enumerate(row):
+                    if not v == None and self.columns[keys[i]].type == str and '{"' and '}' in v:
+                            r_dict[keys[i]] = json.loads(v)
+                    else:
+                        r_dict[keys[i]] = v if not self.columns[keys[i]].type == bool else bool(v)
+                toReturn.append(r_dict)
         return toReturn
     def insert(self, **kw):
         """
@@ -361,13 +362,15 @@ class table:
 
     def __getitem__(self, keyVal):
         val = self.select('*', where={self.prim_key: keyVal})
-        if len(val) > 0:
+        if not val == None and len(val) > 0:
             return val[0]
         return None
     def __setitem__(self, key, values):
         if not self[key] == None:
             self.update(**values, where={self.prim_key: key})
-        if len(values) == len(self.columns): 
+        if not isinstance(values, dict) and len(self.columns.keys()) == 2:
+            self.insert(**{self.prim_key: key, list(self.columns.keys())[1]: values})
+        if len(values) == len(self.columns):
             self.insert(**values)
     def __contains__(self, key):
         if self[key] == None:
