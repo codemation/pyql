@@ -359,19 +359,26 @@ class table:
             where=where_sel
         )
         self.database.run(query)
+    def __get_val_column(self):
+        if len(self.columns.keys()) == 2:
+            for key in list(self.columns.keys()):
+                if not key == self.prim_key:
+                    return key
 
     def __getitem__(self, keyVal):
         val = self.select('*', where={self.prim_key: keyVal})
         if not val == None and len(val) > 0:
+            if len(self.columns.keys()) == 2:
+                return val[0][self.__get_val_column()] # returns 
             return val[0]
         return None
     def __setitem__(self, key, values):
         if not self[key] == None:
             self.update(**values, where={self.prim_key: key})
         if not isinstance(values, dict) and len(self.columns.keys()) == 2:
-            self.insert(**{self.prim_key: key, list(self.columns.keys())[1]: values})
+            self.insert(**{self.prim_key: key, self.__get_val_column(): values})
         if len(self.columns.keys()) == 2 and isinstance(values, dict) and not self.prim_key in values:
-            self.insert(**{self.prim_key: key, list(self.columns.keys())[1]: values})
+            self.insert(**{self.prim_key: key, self.__get_val_column(): values})
         if len(values) == len(self.columns):
             self.insert(**values)
 

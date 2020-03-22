@@ -77,11 +77,13 @@ def test(db):
 
     ##
 
-    # single col insertion using tb[column] = columnValue
+    # key - value col insertion using tb[keyCol] = valCol
     db.tables['keystore']['key1'] = 'value1'
     assert 'key1' in db.tables['keystore'], "insertion failed using setitem"
 
-    # single col insertion using json
+    assert db.tables['keystore']['key1'] == 'value1', "value retrieval failed for key-value table"
+
+    # double col insertion using json
 
     db.tables['keystore']['config1'] = {'a': 1, 'b': 2, 'c': 3}
     assert 'config1' in  db.tables['keystore'], "insertion failed using setitem for json data"
