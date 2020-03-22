@@ -81,7 +81,10 @@ def test(db):
     db.tables['keystore']['key1'] = 'value1'
     assert 'key1' in db.tables['keystore'], "insertion failed using setitem"
 
+    # single col insertion using json
 
+    db.tables['keystore']['config1'] = {'a': 1, 'b': 2, 'c': 3}
+    assert 'config1' in  db.tables['keystore'], "insertion failed using setitem for json data"
 
     colNames = ['order_num', 'date', 'trans', 'symbol', 'qty', 'price', 'afterHours']
     for col in colNames:

@@ -370,8 +370,11 @@ class table:
             self.update(**values, where={self.prim_key: key})
         if not isinstance(values, dict) and len(self.columns.keys()) == 2:
             self.insert(**{self.prim_key: key, list(self.columns.keys())[1]: values})
+        if len(self.columns.keys()) == 2 and isinstance(values, dict) and not self.prim_key in values:
+            self.insert(**{self.prim_key: key, list(self.columns.keys())[1]: values})
         if len(values) == len(self.columns):
             self.insert(**values)
+
     def __contains__(self, key):
         if self[key] == None:
             return False
