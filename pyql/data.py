@@ -90,6 +90,41 @@ class database:
             except Exception as e:
                 print(repr(e))
     def load_tables(self):
+        if self.type == 'sqlite':
+            def describe_table_to_col_sqlite(colConfig):
+                config = colConfig.split(' ')
+                typeTranslate = {
+                    'varchar': str,
+                    'integer': int,
+                    'text': str,
+                    'real': float,
+                    'boolean': bool,
+                    'blob': bytes 
+                }
+                field, typ, extra = config[0], config[1], ' '.join(config[2:])
+                return col(
+                    field, 
+                    typeTranslate[typ.lower() if not 'VARCHAR' in typ else 'varchar'], 
+                    extra)
+                
+            for t in self.get("select name, sql from sqlite_master where type = 'table'"):
+                if 'sqlite' in t[1]:
+                    continue
+                name = t[0]
+                schema = t[1]
+                config = schema.split(f'CREATE TABLE {name}')[1]
+                colConfig = config[2:-2].split(', ')
+                colsInTable = []
+                for cfg in colConfig:
+                    colsInTable.append(describe_table_to_col_sqlite(cfg))
+                # Create tables
+                primaryKey = None
+                for colItem in colsInTable: 
+                    if 'PRIMARY KEY' in colItem.mods:
+                        primaryKey = colItem.name
+                print(colsInTable)
+                self.create_table(t[0], colsInTable, primaryKey)
+
         if self.type == 'mysql':
             def describe_table_to_col(column):
                 typeTranslate = {'tinyint': bool, 'int': int, 'text': str, 'double': float, 'varchar': str}
@@ -109,11 +144,12 @@ class database:
                 colsInTable = []
                 for c in self.run(f'describe {table[0]}'):
                     colsInTable.append(describe_table_to_col(c))
-                PrimaryKey = None
+
+                primaryKey = None
                 for colItem in colsInTable: 
                     if 'PRIMARY KEY' in colItem.mods:
-                        PrimaryKey = colItem.name
-                self.create_table(table[0], colsInTable, PrimaryKey)
+                        primaryKey = colItem.name
+                self.create_table(table[0], colsInTable, primaryKey)
     def create_table(self,name, columns, prim_key=None):
         """
         Usage:
@@ -363,6 +399,7 @@ class table:
         if len(self.columns.keys()) == 2:
             for key in list(self.columns.keys()):
                 if not key == self.prim_key:
+                    print(f"__get_val_column key {key}")
                     return key
 
     def __getitem__(self, keyVal):

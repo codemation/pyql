@@ -27,6 +27,15 @@ class TestData(unittest.TestCase):
             database="testdb"
             )
         test(db)
+        refDb = data.database(
+            sqlite3.connect, 
+            database="testdb"
+            )
+        print(refDb.tables)
+        colNames = ['order_num', 'date', 'trans', 'symbol', 'qty', 'price', 'afterHours']
+        for col in colNames:
+            assert col in refDb.tables['stocks'].columns, f"missing column {col}"
+        
 
 def test(db):
     def check_sel(requested, selection):
@@ -61,7 +70,6 @@ def test(db):
         'order_num' # Primary Key 
     )
     assert 'stocks' in db.tables, "table creation failed"
-
 
     db.run('drop table keystore')
     db.create_table(
