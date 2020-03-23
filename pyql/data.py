@@ -411,13 +411,15 @@ class table:
         return None
     def __setitem__(self, key, values):
         if not self[key] == None:
-            self.update(**values, where={self.prim_key: key})
+            if not isinstance(values, dict) and len(self.columns.keys()) == 2:
+                return self.update(**{self.__get_val_column(): values}, where={self.prim_key: key})
+            return self.update(**values, where={self.prim_key: key})
         if not isinstance(values, dict) and len(self.columns.keys()) == 2:
-            self.insert(**{self.prim_key: key, self.__get_val_column(): values})
+            return self.insert(**{self.prim_key: key, self.__get_val_column(): values})
         if len(self.columns.keys()) == 2 and isinstance(values, dict) and not self.prim_key in values:
-            self.insert(**{self.prim_key: key, self.__get_val_column(): values})
+            return self.insert(**{self.prim_key: key, self.__get_val_column(): values})
         if len(values) == len(self.columns):
-            self.insert(**values)
+            return self.insert(**values)
 
     def __contains__(self, key):
         if self[key] == None:

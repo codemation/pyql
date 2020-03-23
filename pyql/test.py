@@ -88,8 +88,11 @@ def test(db):
     # key - value col insertion using tb[keyCol] = valCol
     db.tables['keystore']['key1'] = 'value1'
     assert 'key1' in db.tables['keystore'], "insertion failed using setitem"
-
     assert db.tables['keystore']['key1'] == 'value1', "value retrieval failed for key-value table"
+
+    # key - value col update using setitem
+    db.tables['keystore']['key1'] = 'newValue1'
+    assert db.tables['keystore']['key1'] == 'newValue1', "update failed using setitem"
 
     # double col insertion using json
 
