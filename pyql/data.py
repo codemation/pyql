@@ -59,6 +59,12 @@ class database:
         self.cursor = get_cursor_manager(self.connect, self.connectConfig) 
         self.tables = {}
         self.load_tables()
+    def __contains__(self, table):
+        if self.type == 'sqlite':
+            return table in [i[0] for i in self.get("select name, sql from sqlite_master where type = 'table'")]
+        else:
+            return table in [i[0] for i in self.get("show tables")]
+
     def run(self, query):
         with self.cursor() as c:
             print(f'{self.db_name}.run cursor {c} {query}')
@@ -122,7 +128,6 @@ class database:
                 for colItem in colsInTable: 
                     if 'PRIMARY KEY' in colItem.mods:
                         primaryKey = colItem.name
-                print(colsInTable)
                 self.create_table(t[0], colsInTable, primaryKey)
 
         if self.type == 'mysql':
@@ -213,7 +218,8 @@ class table:
         schema = f"""CREATE TABLE {self.name} {cols}"""
         return schema
     def create_schema(self):
-        self.database.run(self.get_schema())
+        if not self.name in self.database:
+            self.database.run(self.get_schema())
     def _process_input(self, kw):
         for cName, col in self.columns.items():
             if cName in kw:
@@ -399,7 +405,6 @@ class table:
         if len(self.columns.keys()) == 2:
             for key in list(self.columns.keys()):
                 if not key == self.prim_key:
-                    print(f"__get_val_column key {key}")
                     return key
 
     def __getitem__(self, keyVal):

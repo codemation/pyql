@@ -215,3 +215,7 @@ def test(db):
 
     # Check 'in' functioning
     assert not 1 in db.tables['stocks'], "order 1 should not still exist"
+
+    # Check 'in' functioning for db
+
+    assert 'stocks' in db, "stocks table should still exist here"
