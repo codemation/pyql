@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 from collections import namedtuple
-import json, re
+import json, re, logging
 
 #Used for grouping columns with database class
 col = namedtuple('col', ['name', 'type', 'mods'])
@@ -12,8 +12,11 @@ def get_db_manager(db_connect):
         conn = db_connect(*args, **kwds)
         try:
             yield conn
-        except:
-            print(f'failed to yeild connection with params {kwds} using {db_connect} result {conn}')
+        except Exception as e:
+            try:
+                logging.debug(f'failed to yeild connection with params {kwds} using {db_connect} result {conn} {repr(e)}')
+            except Exception:
+                pass
             if conn:
                 conn.rollback()
         finally:
@@ -74,6 +77,9 @@ class database:
         
     """
     def __init__(self, db_con, **kw):
+        self.debug = 'DEBUG' if 'debug' in kw else None
+        self.log = kw['logger'] if 'logger' in kw else None
+        self.setup_logger(self.log, level=self.debug)
         self.connetParams =  ['user', 'password', 'database', 'host', 'port']
         self.connectConfig = {}
         for k,v in kw.items():
@@ -96,27 +102,23 @@ class database:
             return table in [i[0] for i in self.get("select name, sql from sqlite_master where type = 'table'")]
         else:
             return table in [i[0] for i in self.get("show tables")]
+    def setup_logger(self, logger=None, level=None):
+        if logger == None:
+            level = logging.DEBUG if level == 'DEBUG' else logging.ERROR
+            logging.basicConfig(
+                        level=level,
+                        format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
+                        datefmt='%m-%d %H:%M'
+            )
+            self.log = logging.getLogger()
+        else:
+            self.log = logger
 
     def run(self, query):
         return self.get(query)
-        """
-        with self.cursor() as c:
-            print(f'{self.db_name}.run cursor {c} {query}')
-            try:
-                result = c.execute(query)
-                if result == None:
-                    result = []
-                    for v in c:
-                        result.append(v)
-                return result
-            except Exception as e:
-                print(repr(e))
-                return repr(e)
-        """
-
     def get(self, query):
         query = f"{';'.join(self.preQuery + [query])}"
-        print(f'{self.db_name}.get query: {query}')
+        self.log.debug(f'{self.db_name}.get query: {query}')
         with self.cursor() as c:
             try:
                 rows = []
@@ -132,7 +134,7 @@ class database:
                             rows.append(row)
                 return result if len(rows) == 0 else rows
             except Exception as e:
-                print(f"exception in .get {repr(e)}")
+                self.log.exception(f"exception in .get {repr(e)}")
     def load_tables(self):
         if self.type == 'sqlite':
             def describe_table_to_col_sqlite(colConfig):
@@ -140,7 +142,6 @@ class database:
                 for i in ' '.join(colConfig.split(',')).split(' '):
                     if not i == '' and not i == '\n':
                         config.append(i.rstrip())
-                print(f"load_tables config: {config}")
                 typeTranslate = {
                     'varchar': str,
                     'integer': int,
@@ -150,7 +151,6 @@ class database:
                     'blob': bytes 
                 }
                 field, typ, extra = config[0], config[1], ' '.join(config[2:])
-                #print(f"field: {field} type: {typ} extra: {extra}")
                 return col(
                     field, 
                     typeTranslate[typ.lower() if not 'VARCHAR' in typ else 'varchar'], 
@@ -163,9 +163,7 @@ class database:
                 schema = t[1]
                 config = schema.split(f'CREATE TABLE {name}')[1]
                 config = flatten(config)
-                print(config)
                 colConfig = inner(config).split(', ')
-                print(f"colConfig: {colConfig}")
                 colsInTable = []
                 foreignKeys = None
                 for cfg in colConfig:
@@ -183,7 +181,6 @@ class database:
                                     'ref': no_blanks(parentKey),
                                     'mods': mods.rstrip()
                                 }
-                        print(f"foreign key detected: {foreignKeys}")
                 # Create tables
                 primaryKey = None
                 for colItem in colsInTable: 
@@ -204,10 +201,8 @@ class database:
                 for i in ' '.join(column.split(',')).split(' '):
                     if not i == '' and not i == '\n':
                         config.append(i.rstrip())
-                print(f"load_tables config: {config}")
                 column = config
                 field = inner(column[0], '`','`')
-                print(f'field: {field}')
                 typ = None
                 for k, v in typeTranslate.items():
                     if k in column[1]:
@@ -223,12 +218,10 @@ class database:
                 extra = ' '.join(column[2:])
                 return col(field, typ, extra)
             for table, in self.run('show tables'):
-                print(table)
                 colsInTable = []
                 for _, schema in self.run(f'show create table {table}'):
                     schema = flatten(schema.split(f'CREATE TABLE `{table}`')[1])
                     colConfig = inner(schema).split(', ')
-                    print(f"colConfig: {colConfig}")
                     colsInTable = []
                     foreignKeys = None
                     for cfg in colConfig:
@@ -250,7 +243,6 @@ class database:
                                         'ref': no_blanks(inner(parentKey, '`', '`')),
                                         'mods': mods.rstrip()
                                     }
-                            print(f"foreign key detected: {foreignKeys}")
                 table = inner(table, '`', '`')
                 self.create_table(table, colsInTable, primaryKey, fKeys=foreignKeys)
     def create_table(self,name, columns, prim_key=None, **kw):
@@ -366,7 +358,7 @@ class table:
                                 elif 'false' in where[cName].lower():
                                     where[cName] = False if table.database.type == 'mysql' else 0
                                 else:
-                                    print(f"Unsupported value {where[cName]} provide for column type {col.type}")
+                                    self.log.warning(f"Unsupported value {where[cName]} provide for column type {col.type}")
                                     del(where[cName])
                                     continue
             return where
@@ -568,7 +560,7 @@ class table:
         vals = vals + ')'
 
         query = f'INSERT INTO {self.name} {cols} VALUES {vals}'
-        print(query)
+        self.log.debug(query)
         self.database.run(query)
     def update(self,**kw):
         """
@@ -597,7 +589,7 @@ class table:
             cols_vals=cols_to_set,
             where=where_sel
         )
-        print(query)
+        self.log.debug(query)
         self.database.run(query)
     def delete(self, all_rows=False, **kw):
         """
