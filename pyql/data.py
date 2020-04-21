@@ -111,6 +111,7 @@ class database:
                         datefmt='%m-%d %H:%M'
             )
             self.log = logging.getLogger()
+            self.log.setLevel(level)
         else:
             self.log = logger
 
