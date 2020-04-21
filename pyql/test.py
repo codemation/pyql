@@ -38,6 +38,7 @@ class TestData(unittest.TestCase):
         
 
 def test(db):
+    import random
     def check_sel(requested, selection):
         requestItems = []
         if requested == '*':
@@ -59,7 +60,7 @@ def test(db):
     db.create_table(
         'stocks', 
         [    
-            ('order_num', int, 'AUTO_INCREMENT'if db.type == 'mysql' else 'AUTOINCREMENT'),
+            ('order_num', int, 'AUTO_INCREMENT' if db.type == 'mysql' else 'AUTOINCREMENT'),
             ('date', str),
             ('trans', str),
             ('symbol', str),
@@ -69,7 +70,61 @@ def test(db):
         ], 
         'order_num' # Primary Key 
     )
+    print(db.tables['stocks'].columns)
     assert 'stocks' in db.tables, "table creation failed"
+
+    db.run('drop table departments')
+    db.create_table(
+        'departments', 
+        [    
+            ('id', int, 'UNIQUE'),
+            ('name', str)
+
+        ], 
+        'id' # Primary Key 
+    )
+    assert 'departments' in db.tables, "table creation failed"
+
+    db.run('drop table positions')
+    db.create_table(
+        'positions', 
+        [    
+            ('id', int, 'UNIQUE'),
+            ('name', str),
+            ('departmentId', int)
+
+        ], 
+        'id', # Primary Key
+        fKeys={
+            'departmentId': {
+                    'table': 'departments', 
+                    'ref': 'id',
+                    'mods': 'ON UPDATE CASCADE ON DELETE CASCADE'
+            }
+        }
+    )
+    assert 'positions' in db.tables, "table creation failed"
+
+    db.run('drop table employees')
+    db.create_table(
+        'employees', 
+        [    
+            ('id', int, 'UNIQUE'),
+            ('name', str),
+            ('positionId', int),
+
+        ], 
+        'id', # Primary Key
+        fKeys={
+            'positionId': {
+                    'table': 'positions', 
+                    'ref': 'id',
+                    'mods': 'ON UPDATE CASCADE ON DELETE CASCADE'
+            }
+        }
+    )
+    assert 'employees' in db.tables, "table creation failed"
+
 
     db.run('drop table keystore')
     db.create_table(
@@ -106,7 +161,7 @@ def test(db):
     # JSON Load test
     txData = {'type': 'BUY', 'condition': {'limit': '36.00', 'time': 'EndOfTradingDay'}}
 
-    trade = {'date': '2006-01-05', 'trans': txData, 'symbol': 'RHAT', 'qty': 100, 'price': 35.14, 'afterHours': True}
+    trade = {'order_num': 1, 'date': '2006-01-05', 'trans': txData, 'symbol': 'RHAT', 'qty': 100, 'price': 35.14, 'afterHours': True}
 
     # pre insert * select # 
     sel = db.tables['stocks'].select('*')
@@ -123,22 +178,123 @@ def test(db):
     #     price=35.14,
     #     afterHours=True
     # )
-
-
-    # Select Data
-
+    import uuid
+    # create departments
+    departments = [
+        {'id': 1001, 'name': 'HR'},
+        {'id': 2001, 'name': 'Sales'},
+        {'id': 3001, 'name': 'Support'},
+        {'id': 4001, 'name': 'Marketing'}
+    ]
+    for department in departments:
+        db.tables['departments'].insert(**department)
+    
+    positions = [
+        {'id': 100101, 'name': 'Director', 'departmentId': 1001},
+        {'id': 100102, 'name': 'Manager', 'departmentId': 1001},
+        {'id': 100103, 'name': 'Rep', 'departmentId': 1001},
+        {'id': 100104, 'name': 'Intern', 'departmentId': 1001},
+        {'id': 200101, 'name': 'Director', 'departmentId': 2001},
+        {'id': 200102, 'name': 'Manager', 'departmentId': 2001},
+        {'id': 200103, 'name': 'Rep', 'departmentId': 2001},
+        {'id': 200104, 'name': 'Intern', 'departmentId': 2001},
+        {'id': 300101, 'name': 'Director', 'departmentId': 3001},
+        {'id': 300102, 'name': 'Manager', 'departmentId': 3001},
+        {'id': 300103, 'name': 'Rep', 'departmentId': 3001},
+        {'id': 300104, 'name': 'Intern', 'departmentId': 3001},
+        {'id': 400101, 'name': 'Director', 'departmentId': 4001},
+        {'id': 400102, 'name': 'Manager', 'departmentId': 4001},
+        {'id': 400103, 'name': 'Rep', 'departmentId': 4001},
+        {'id': 400104, 'name': 'Intern', 'departmentId': 4001}
+    ]
+    
+    def get_random_name():
+        name = ''
+        fNames = ['Jane', 'Jill', 'Joe', 'John', 'Chris', 'Clara', 'Dale', 'Dana', 'Eli', 'Elly', 'Frank', 'George']
+        lNames = ['Adams', 'Bale', 'Carson', 'Doe', 'Franklin','Smith', 'Wallace', 'Jacobs']
+        fInd, lInd = random.randrange(len(fNames)-1), random.randrange(len(lNames)-1)
+        return f"{fNames[fInd]} {lNames[lInd]}"
+    employees = []
+    def add_employee(eId, count, positionId):
+        empId = eId
+        for _ in range(count):
+            employees.append({'id': empId, 'name': get_random_name(), 'positionId': positionId})
+            empId+=1
+    eId = 1000
+    for position in positions:
+        print(position)
+        db.tables['positions'].insert(**position)
+        if position['name'] == 'Director':
+            add_employee(eId, 1, position['id'])
+            eId+=1
+        elif position['name'] == 'Manager':
+            add_employee(eId, 2, position['id'])
+            eId+=2
+        elif position['name'] == 'Rep':
+            add_employee(eId, 4, position['id'])
+            eId+=4
+        else:
+            add_employee(eId, 8, position['id'])
+            eId+=8
 
     
-    # * select # 
+    for employee in employees:
+        db.tables['employees'].insert(**employee)
+    # Select Data
+
+    # join selects
+
+    for position, count in [('Director', 4), ('Manager', 8), ('Rep', 16), ('Intern', 32)]:
+        joinSel = db.tables['employees'].select(
+            '*', 
+            join={
+                'positions': {'employees.positionId': 'positions.id'},
+                'departments': {'positions.departmentId': 'departments.id'}
+                },
+            where={
+                'positions.name': position
+                }
+            )
+        assert len(joinSel) == count, f"expected number of {position}'s' is {count}, found {len(joinSel)}"
+    for department in ['HR', 'Marketing', 'Support', 'Sales']:
+        for position, count in [('Director', 1),('Manager', 2), ('Rep', 4), ('Intern', 8)]:
+            joinSel = db.tables['employees'].select(
+                '*', 
+                join={
+                    'positions': {'employees.positionId': 'positions.id'},
+                    'departments': {'positions.departmentId': 'departments.id'}
+                    },
+                where={
+                    'positions.name': position,
+                    'departments.name': department
+                    }
+                )
+            assert len(joinSel) == count, f"expected number of {position}'s' is {count}, found {len(joinSel)}"
+
+    # join select - testing default key usage if not provided
+    for position, count in [('Director', 4),('Manager', 8), ('Rep', 16), ('Intern', 32)]:
+        joinSel = db.tables['employees'].select(
+            '*', 
+            join='positions',
+            where={'positions.name': position}
+            )
+        assert len(joinSel) == count, f"expected number of {position}'s' is {count}, found {len(joinSel)}"
+
+    
+    # * select #
     sel = db.tables['stocks'].select('*')
     print(sel)
     check_sel('*', sel)
+
+    try:
+        sel = db.tables['stocks'].select('*', where={'doesNotExist': 'doesNotExist'})
+    except Exception as e:
+        assert type(e) == data.InvalidInputError, "select should have resulted in exception"
 
     # Iter Check
     sel = [row for row in db.tables['stocks']]
     check_sel('*', sel)
     print(f"iter check ")
-
 
     # Partial insert
 

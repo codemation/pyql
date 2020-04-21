@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 from collections import namedtuple
-import json
+import json, re
 
 #Used for grouping columns with database class
 col = namedtuple('col', ['name', 'type', 'mods'])
@@ -31,6 +31,35 @@ def get_cursor_manager(connect_db, params={}):
             finally:
                 conn.commit()
     return cursor
+def flatten(s):
+    return re.sub('\n',' ', s)
+
+def no_blanks(s):
+    return re.sub(' ', '', s)
+    """
+    washed = ''
+    for l in s:
+        if not l == ' ':
+            washed = f"{washed}{l}"
+    return washed
+    """
+def inner(s, l='(', r=')'):
+    if not l in s or not r in s:
+        return s
+    sMap = [(ind, t) for ind, t in enumerate(s)]
+    left, right = False, False
+    inside = {}
+    for ind, t in sMap:
+        if left == False:
+            if t == l:
+                left = True
+                inside['left'] =  ind
+            continue
+        if right == False:
+            if t == r:
+                inside['right'] = ind
+    return s[inside['left']+1:inside['right']]
+
 
 class database:
     """
@@ -52,11 +81,14 @@ class database:
                 self.connectConfig[k] = v
         self.db_con = db_con
         self.type = 'sqlite' if not 'type' in kw else kw['type']
-        self.db_name = kw['database'] if 'database' in kw else 'NO_DB_NAME_PROVIDED'
-        assert not self.db_name == 'NO_DB_NAME_PROVIDED', "NO_DB_NAME_PROVIDED"
-
+        if not 'database' in kw:
+            raise InvalidInputError(kw, "missing field for 'database'")
+        self.db_name = kw['database']
         self.connect = get_db_manager(self.db_con)
-        self.cursor = get_cursor_manager(self.connect, self.connectConfig) 
+        self.cursor = get_cursor_manager(self.connect, self.connectConfig)
+        if self.type == 'sqlite':
+            self.foreign_keys = False
+        self.preQuery = [] # SQL commands Ran before each for self.get self.run query 
         self.tables = {}
         self.load_tables()
     def __contains__(self, table):
@@ -66,6 +98,8 @@ class database:
             return table in [i[0] for i in self.get("show tables")]
 
     def run(self, query):
+        return self.get(query)
+        """
         with self.cursor() as c:
             print(f'{self.db_name}.run cursor {c} {query}')
             try:
@@ -78,27 +112,35 @@ class database:
             except Exception as e:
                 print(repr(e))
                 return repr(e)
+        """
 
     def get(self, query):
+        query = f"{';'.join(self.preQuery + [query])}"
         print(f'{self.db_name}.get query: {query}')
         with self.cursor() as c:
             try:
                 rows = []
-                result = c.execute(query)
-                if result == None:
-                    result = []
-                    for v in c:
-                        result.append(v)
-                    return result
-                for row in result:
-                    rows.append(row)
-                return rows
+                result = []
+                query = query.split(';') if ';' in query else [query]
+                for q in query:
+                    r = c.execute(q)
+                    if r == None:
+                        for v in c:
+                            result.append(v)
+                    else:
+                        for row in r:
+                            rows.append(row)
+                return result if len(rows) == 0 else rows
             except Exception as e:
-                print(repr(e))
+                print(f"exception in .get {repr(e)}")
     def load_tables(self):
         if self.type == 'sqlite':
             def describe_table_to_col_sqlite(colConfig):
-                config = colConfig.split(' ')
+                config = []
+                for i in ' '.join(colConfig.split(',')).split(' '):
+                    if not i == '' and not i == '\n':
+                        config.append(i.rstrip())
+                print(f"load_tables config: {config}")
                 typeTranslate = {
                     'varchar': str,
                     'integer': int,
@@ -108,6 +150,7 @@ class database:
                     'blob': bytes 
                 }
                 field, typ, extra = config[0], config[1], ' '.join(config[2:])
+                #print(f"field: {field} type: {typ} extra: {extra}")
                 return col(
                     field, 
                     typeTranslate[typ.lower() if not 'VARCHAR' in typ else 'varchar'], 
@@ -119,43 +162,98 @@ class database:
                 name = t[0]
                 schema = t[1]
                 config = schema.split(f'CREATE TABLE {name}')[1]
-                colConfig = config[2:-2].split(', ')
+                config = flatten(config)
+                print(config)
+                colConfig = inner(config).split(', ')
+                print(f"colConfig: {colConfig}")
                 colsInTable = []
+                foreignKeys = None
                 for cfg in colConfig:
-                    colsInTable.append(describe_table_to_col_sqlite(cfg))
+                    if not 'FOREIGN KEY' in cfg:
+                        colsInTable.append(describe_table_to_col_sqlite(cfg))
+                    else:
+                        if foreignKeys == None:
+                            foreignKeys = {}
+                        lkey, ref = cfg.split('FOREIGN KEY')[1].split('REFERENCES')
+                        lkey = inner(lkey)
+                        parentTable, mods = ref.split(')')
+                        parentTable, parentKey = parentTable.split('(')
+                        foreignKeys[no_blanks(lkey)] = {
+                                    'table': no_blanks(parentTable), 
+                                    'ref': no_blanks(parentKey),
+                                    'mods': mods.rstrip()
+                                }
+                        print(f"foreign key detected: {foreignKeys}")
                 # Create tables
                 primaryKey = None
                 for colItem in colsInTable: 
-                    if 'PRIMARY KEY' in colItem.mods:
+                    if 'PRIMARY KEY' in colItem.mods.upper():
                         primaryKey = colItem.name
-                self.create_table(t[0], colsInTable, primaryKey)
+                self.create_table(t[0], colsInTable, primaryKey, fKeys=foreignKeys)
+                if not foreignKeys == None:
+                    self.foreign_keys = True
+                    fKeysPreQuery = 'PRAGMA foreign_keys=true'
+                    if not fKeysPreQuery in self.preQuery:
+                        self.preQuery.append(fKeysPreQuery)
+
 
         if self.type == 'mysql':
             def describe_table_to_col(column):
                 typeTranslate = {'tinyint': bool, 'int': int, 'text': str, 'double': float, 'varchar': str}
-                field = column[0]
+                config = []
+                for i in ' '.join(column.split(',')).split(' '):
+                    if not i == '' and not i == '\n':
+                        config.append(i.rstrip())
+                print(f"load_tables config: {config}")
+                column = config
+                field = inner(column[0], '`','`')
+                print(f'field: {field}')
                 typ = None
-                for k in typeTranslate:
+                for k, v in typeTranslate.items():
                     if k in column[1]:
-                        typ = typeTranslate[k]
+                        typ = v
                         break
-                assert typ is not None, f'type not found in translate dict for {column}'
+                if typ == None:
+                    raise InvalidColumnType(column[1], f"invalid type provided for column, supported types {list(typeTranslate.keys())}")
+                """
                 Null = 'NOT NULL ' if column[2] == 'NO' else ''
                 Key = 'PRIMARY KEY ' if column[3] == 'PRI' else ''
                 Default = '' # TOODOO - check if this needs implementing
-                Extra = column[5].upper()
-                return col(field, typ, Null+Key+Extra)
-            for table in self.run('show tables'):
+                """
+                extra = ' '.join(column[2:])
+                return col(field, typ, extra)
+            for table, in self.run('show tables'):
+                print(table)
                 colsInTable = []
-                for c in self.run(f'describe {table[0]}'):
-                    colsInTable.append(describe_table_to_col(c))
-
-                primaryKey = None
-                for colItem in colsInTable: 
-                    if 'PRIMARY KEY' in colItem.mods:
-                        primaryKey = colItem.name
-                self.create_table(table[0], colsInTable, primaryKey)
-    def create_table(self,name, columns, prim_key=None):
+                for _, schema in self.run(f'show create table {table}'):
+                    schema = flatten(schema.split(f'CREATE TABLE `{table}`')[1])
+                    colConfig = inner(schema).split(', ')
+                    print(f"colConfig: {colConfig}")
+                    colsInTable = []
+                    foreignKeys = None
+                    for cfg in colConfig:
+                        if not 'FOREIGN KEY' in cfg:
+                            if not 'PRIMARY KEY' in cfg:
+                                if not 'KEY' in cfg:
+                                    colsInTable.append(describe_table_to_col(cfg))
+                            else:
+                                primaryKey = inner(cfg.split('PRIMARY KEY')[1])
+                        else:
+                            if foreignKeys == None:
+                                foreignKeys = {}
+                            lkey, ref = cfg.split('FOREIGN KEY')[1].split('REFERENCES')
+                            lkey = inner(inner(lkey), '`', '`')
+                            parentTable, mods = ref.split(')')
+                            parentTable, parentKey = parentTable.split('(')
+                            foreignKeys[no_blanks(lkey)] = {
+                                        'table': no_blanks(inner(parentTable, '`', '`')), 
+                                        'ref': no_blanks(inner(parentKey, '`', '`')),
+                                        'mods': mods.rstrip()
+                                    }
+                            print(f"foreign key detected: {foreignKeys}")
+                table = inner(table, '`', '`')
+                self.create_table(table, colsInTable, primaryKey, fKeys=foreignKeys)
+    def create_table(self,name, columns, prim_key=None, **kw):
         """
         Usage:
             db.create_table(
@@ -168,19 +266,23 @@ class database:
                     ('qty', float, None),
                     ('price', str, None)
                     ], 
-                'order_num' # Primary Key
+                'order_num', # Primary Key
+                fkeys={'trans': {'table': 'transactions', 'ref': 'txId'}} 
             )
         """
         #Convert tuple columns -> named_tuples
         cols = []
         for c in columns:
             # Allows for len(2) tuple input ('name', int) --> converts to col('name', int, None)
-            cols.append(col(*c) if len(c) > 2 else col(*c, None)) 
-        self.tables[name] = table(name, self, cols, prim_key)
+            if not isinstance(c, col):
+                cols.append(col(*c) if len(c) > 2 else col(*c, None)) 
+            else:
+                cols.append(c)
+        self.tables[name] = table(name, self, cols, prim_key, **kw)
 
 
 class table:
-    def __init__(self, name, database, columns, prim_key = None):
+    def __init__(self, name, database, columns, prim_key = None, **kw):
         self.name = name
         self.database = database
         self.types = {int,str,float,bool,bytes}
@@ -193,13 +295,18 @@ class table:
         }
         self.columns = {}
         for c in columns:
-            assert c.type in self.types, f'unknown type {c.type} in {c.name} {c}'
-            assert c.name not in self.columns
+            if not c.type in self.types:
+                raise InvalidColumnType(f"input type: {type(c.type)} of {c}", f"invalid type provided for column, supported types {self.types}")
+            if c.name in self.columns:
+                raise InvalidInputError(f"duplicate column name {c.name} provided", f"column names may only be specified once for table objects")
             self.columns[c.name] = c
         if prim_key is not None:
             self.prim_key = prim_key if prim_key in self.columns else None
+        self.fKeys = kw['fKeys'] if 'fKeys' in kw else None
+            
         self.create_schema()
     def get_schema(self):
+        constraints = ''
         cols = '('
         for cName,col in self.columns.items():
             for k,v in self.translation.items():
@@ -211,57 +318,117 @@ class table:
                     else:
                         cols = f'{cols}{col.name} {k.upper()}'
                     if cName == self.prim_key:
-                        cols = f'{cols} PRIMARY KEY'                    
-                    if col.mods is not None:
-                        cols = f'{cols} {col.mods}'
-        cols = cols + ' )'
-        schema = f"""CREATE TABLE {self.name} {cols}"""
+                        cols = f'{cols} PRIMARY KEY'
+                        if col.mods is not None and 'primary key' in col.mods.lower():
+                            cols = f"{cols} {''.join(col.mods.upper().split('PRIMARY KEY'))}"
+                        else:
+                            cols = f"{cols} {col.mods.upper()}"
+                    else:
+                        if col.mods is not None:
+                            cols = f'{cols} {col.mods}'
+        if not self.fKeys == None:
+            for lKey, fKey in self.fKeys.items():
+                comma = ', ' if len(constraints) > 0 else ''
+                constraints = f"{constraints}{comma}FOREIGN KEY({lKey}) REFERENCES {fKey['table']}({fKey['ref']}) {fKey['mods']}"
+        comma = ', ' if len(constraints) > 0 else ''
+        schema = f"CREATE TABLE {self.name} {cols}{comma}{constraints})"
         return schema
     def create_schema(self):
         if not self.name in self.database:
             self.database.run(self.get_schema())
     def _process_input(self, kw):
-        for cName, col in self.columns.items():
-            if cName in kw:
-                if not col.type == bool:
-                    #JSON handling
-                    if col.type == str and type(kw[cName]) == dict:
-                        kw[cName] = f"'{col.type(json.dumps(kw[cName]))}'"
-                        continue
-                    kw[cName] = col.type(kw[cName]) if not kw[cName] == None else 'NULL'
-                else:
-                    try:
-                        kw[cName] = col.type(int(kw[cName])) if self.database.type == 'mysql' else int(col.type(int(kw[cName])))
-                    except:
-                        #Bool Input is string
-                        if 'true' in kw[cName].lower():
-                            kw[cName] = True if self.database.type == 'mysql' else 1
-                        elif 'false' in kw[cName].lower():
-                            kw[cName] = False if self.database.type == 'mysql' else 0
+        tables = [self]
+        if 'join' in kw:
+            if isinstance(kw['join'], dict):
+                for table in kw['join']:
+                    if table in self.database.tables:
+                        tables.append(self.database.tables[table])
+            else:
+                if kw['join'] in self.database.tables:
+                    tables.append(self.database.tables[kw['join']])
+        def verify_input(where):
+            for table in tables:
+                for cName, col in table.columns.items():
+                    if cName in where:
+                        if not col.type == bool:
+                            #JSON handling
+                            if col.type == str and type(where[cName]) == dict:
+                                where[cName] = f"'{col.type(json.dumps(where[cName]))}'"
+                                continue
+                            where[cName] = col.type(where[cName]) if not where[cName] == None else 'NULL'
                         else:
-                            print(f"Unsupported value {kw[cName]} provide for column type {col.type}")
-                            del(kw[cName])
-                            continue
+                            try:
+                                where[cName] = col.type(int(where[cName])) if table.database.type == 'mysql' else int(col.type(int(where[cName])))
+                            except:
+                                #Bool Input is string
+                                if 'true' in where[cName].lower():
+                                    where[cName] = True if table.database.type == 'mysql' else 1
+                                elif 'false' in where[cName].lower():
+                                    where[cName] = False if table.database.type == 'mysql' else 0
+                                else:
+                                    print(f"Unsupported value {where[cName]} provide for column type {col.type}")
+                                    del(where[cName])
+                                    continue
+            return where
+        kw = verify_input(kw)
+        if 'where' in kw:
+            kw['where'] = verify_input(kw['where'])
         return kw
 
     def __where(self, kw):
         where_sel = ''
         index = 0
+        kw = self._process_input(kw)
         if 'where' in kw:
-            kw['where'] = self._process_input(kw['where'])
+            """
             for cName,v in kw['where'].items():
-                assert cName in self.columns, f'{cName} is not a valid column in table {self.name}'
+                if not cName in self.columns:
+                    error = f'{cName} is not a valid column in table {self.name}'
+                    raise InvalidInputError(error, f"columns available {[self.columns[c].name for c in self.columns]}")
+            """
             andValue = 'WHERE '
             for cName,v in kw['where'].items():
+                if '.' in cName:
+                    table, column = cName.split('.')
+                else:
+                    table, column = self.name, cName
+                if not column in self.database.tables[table].columns:
+                    raise InvalidInputError(f"{column} is not a valid column in table {table}", "invalid column specified for 'where'")
+                table = self.database.tables[table]
                 eq = '=' if not v == 'NULL' else ' IS '
                 #json check
-                if v == 'NULL' or self.columns[cName].type == str and '{"' and '}' in v:
+                if v == 'NULL' or table.columns[column].type == str and '{"' and '}' in v:
                     where_sel = f"{where_sel}{andValue}{cName}{eq}{v}"
                 else:
-                    val = v if self.columns[cName].type is not str else "'"+v+"'"
+                    val = v if table.columns[column].type is not str else f"'{v}'"
                     where_sel = f"{where_sel}{andValue}{cName}{eq}{val}"
                 andValue = ' AND '
         return where_sel
+    def _join(self, kw):
+        join = ''
+        if not 'join' in kw:
+            return join
+        for joinTable, condition in kw['join'].items():
+            if not joinTable in self.database.tables:
+                error = f"{joinTable} does not exist in database"
+                raise InvalidInputError(error, f"valid tables {list(t for t in self.database.tables)}")
+            if not len(condition) == 1:
+                message = "join usage: join={'table1': {'table1.col': 'this.col'} } or  join={'table1': {'this.col': 'table1.col'} }"
+                raise InvalidInputError(f"join expects dict of len 1, not {len(condition)} for {condition}", message)
+            for col1, col2 in condition.items():
+                for col in [col1, col2]:
+                    if not '.' in col:
+                        usage = "join usage: join={'table1': {'table1.col': 'this.col'} } or  join={'table1': {'this.col': 'table1.col'} }"
+                        raise InvalidInputError(f"column {col} missing expected '.'", usage)
+                    table, column = col.split('.')
+                    if not table in self.database.tables:
+                        error = f"{kw['join']} does not exist in database"
+                        raise InvalidInputError(error, f"valid tables {list(t for t in self.database.tables)}")
+                    if not column in self.database.tables[table].columns:
+                        error = f"column {column} is not a valid column in table {table}"
+                        raise InvalidColumnType(error, f"valid column types {self.database.tables[table].columns}")
+                join = f'{join}JOIN {joinTable} ON {col1} = {col2} '
+        return join
 
     def select(self, *selection, **kw):
         """
@@ -277,39 +444,88 @@ class table:
             # Using Primary key only
             sel = tb[0] # select * from <table> where <table_prim_key> = <val>
         """
+
+
+        if 'join' in kw and isinstance(kw['join'], str):
+            if kw['join'] in [self.fKeys[k]['table'] for k in self.fKeys]:
+                for lKey, fKey in self.fKeys.items():
+                    if fKey['table'] == kw['join']:
+                        kw['join'] = {
+                            fKey['table']: {
+                                f"{self.name}.{lKey}": f"{fKey['table']}.{fKey['ref']}"}
+                                }
+            else:
+                error = f"join table {kw['join']} specified without specifying matching columns or tables do not share keys"
+                raise InvalidInputError(error, f"valid fKeys {self.fkeys}")
         if '*' in selection:
             selection = '*'
+            if 'join' in kw:
+                if isinstance(kw['join'], dict):
+                    colRefs = {f'{self.name}.{self.columns[c].name}': self.columns[c] for c in self.columns}
+                    keys = [f'{self.name}.{self.columns[c].name}' for c in self.columns]
+                    for table in list(kw['join'].keys()):
+                        for joinC1, joinC2 in kw['join'][table].items():
+                            if table in self.database.tables:
+                                for col in self.database.tables[table].columns:
+                                    column = self.database.tables[table].columns[col]
+                                    if f'{table}.{column.name}' == joinC2:
+                                        keys.append(joinC1)
+                                        continue
+                                    colRefs[f'{table}.{column.name}'] =  column
+                                    keys.append(f'{table}.{column.name}')
+            else:
+                colRefs = self.columns
+                keys = list(self.columns.keys())
         else:
-            for i in selection:
-                assert i in self.columns, f"{i} is not a column in table {self.name}"
+            colRefs = {}
+            keys = []
+            for col in selection:
+                if not col in self.columns:
+                    if '.' in col:
+                        table, column = col.split('.')
+                        if table in self.database.tables and column in self.database.tables[table].columns:
+                            colRefs[col] = self.database.tables[table].columns[column]
+                            keys.append(col)
+                            continue
+                    raise InvalidColumnType(f"column {col} is not a valid column", f"valid column types {self.columns}")
+                colRefs[col] = self.columns[col]
+                keys.append(col)
             selection = ','.join(selection)
+        join = ''
+        if 'join' in kw:
+            join = self._join(kw)        
         where_sel = self.__where(kw)
         orderby = ''
         if 'orderby' in kw:
-            assert kw['orderby'] in self.columns
+            if not kw['orderby'] in self.columns:
+                raise InvalidInputError(f"orderby input {kw['orderby']} is not a valid column name", f"valid columns {self.columns}")
             orderby = ' ORDER BY '+ kw['orderby']
-        query = 'SELECT {select_item} FROM {name} {where}{order}'.format(
+        query = 'SELECT {select_item} FROM {name} {join}{where}{order}'.format(
             select_item = selection,
             name = self.name,
+            join=join,
             where = where_sel,
             order = orderby
         )
         rows = self.database.get(query)
 
         #dictonarify each row result and return
+        """
         if not selection == '*':
             keys = selection.split(',') if ',' in selection else selection.split(' ')
         else:
             keys = list(self.columns.keys())
+        """
         toReturn = []
         if not rows == None:
             for row in rows:
                 r_dict = {}
                 for i,v in enumerate(row):
-                    if not v == None and self.columns[keys[i]].type == str and '{"' and '}' in v:
+                    #if not v == None and self.columns[keys[i]].type == str and '{"' and '}' in v:
+                    if not v == None and colRefs[keys[i]].type == str and '{"' and '}' in v:
                             r_dict[keys[i]] = json.loads(v)
                     else:
-                        r_dict[keys[i]] = v if not self.columns[keys[i]].type == bool else bool(v)
+                        r_dict[keys[i]] = v if not colRefs[keys[i]].type == bool else bool(v)
                 toReturn.append(r_dict)
         return toReturn
     def insert(self, **kw):
@@ -335,8 +551,7 @@ class table:
             if not cName in kw:
                 if not col.mods == None:
                     if 'NOT NULL' in col.mods:
-                        print(f'{cName} is a required field for INSERT in table {self.name}')
-                        return
+                        raise InvalidInputError(f'{cName} is a required field for INSERT in table {self.name}', "correct and try again")
                 continue
             if len(cols) > 2:
                 cols = f'{cols}, '
@@ -360,12 +575,9 @@ class table:
         Usage:
             db.tables['stocks'].update(symbol='NTAP',trans='SELL', where={'order_num': 1})
         """
-        try:
-            kw = self._process_input(kw)
-        except Exception as e:
-            print(e)
+        
+        kw = self._process_input(kw)
 
-  
         cols_to_set = ''
         for cName,cVal in kw.items():
             if cName.lower() == 'where':
@@ -393,9 +605,13 @@ class table:
             db.tables['stocks'].delete(where={'order_num': 1})
             db.tables['stocks'].delete(all_rows=True)
         """
-        where_sel = self.__where(kw)
-        if len(where_sel) < 1:
-            assert all_rows, "where statment is required with DELETE, otherwise specify .delete(all_rows=True)"
+        try:
+            where_sel = self.__where(kw)
+        except Exception as e:
+            return repr(e)
+        if len(where_sel) < 1 and not all_rows:
+            error = "where statment is required with DELETE, otherwise specify .delete(all_rows=True)"
+            raise InvalidInputError(error, "correct & try again later")
         query = "DELETE FROM {name} {where}".format(
             name=self.name,
             where=where_sel
@@ -435,8 +651,17 @@ class table:
             for row in self.select('*'):
                 yield row
         return gen()
+class Error(Exception):
+    pass
+class InvalidInputError(Error):
+    def __init__(self, invalidInput, message):
+        self.invalidInput = invalidInput
+        self.message = message
+class InvalidColumnType(Error):
+    def __init__(self, invalidType, message):
+        self.invalidType = invalidType
+        self.message = message
 #   TOODOO:
 # - Add support for creating column indexes per tables
-# - Add suppport for foreign keys & joins with queries
 # - Determine if views are needed and add support
 # - Support for transactions?
