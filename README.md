@@ -151,7 +151,7 @@ Requires key-value pairs - may be input using dict or the following
     )
 
 #### Inserting Special Data 
-    Columns of type string can hold JSON dumpable python dictionaries as JSON strings and are automatically converted back into dicts when read. Nested Dicts are also Ok, but all items should be JSON compatible data types
+Columns of type string can hold JSON dumpable python dictionaries as JSON strings and are automatically converted back into dicts when read. Nested Dicts are also Ok, but all items should be JSON compatible data types
 
         txData = {
             'type': 'BUY', 
