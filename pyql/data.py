@@ -359,7 +359,7 @@ class table:
                                 elif 'false' in where[cName].lower():
                                     where[cName] = False if table.database.type == 'mysql' else 0
                                 else:
-                                    self.log.warning(f"Unsupported value {where[cName]} provide for column type {col.type}")
+                                    self.database.log.warning(f"Unsupported value {where[cName]} provide for column type {col.type}")
                                     del(where[cName])
                                     continue
             return where
@@ -561,7 +561,7 @@ class table:
         vals = vals + ')'
 
         query = f'INSERT INTO {self.name} {cols} VALUES {vals}'
-        self.log.debug(query)
+        self.database.log.debug(query)
         self.database.run(query)
     def update(self,**kw):
         """
@@ -590,7 +590,7 @@ class table:
             cols_vals=cols_to_set,
             where=where_sel
         )
-        self.log.debug(query)
+        self.database.log.debug(query)
         self.database.run(query)
     def delete(self, all_rows=False, **kw):
         """

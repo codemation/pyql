@@ -73,6 +73,9 @@ def test(db):
     print(db.tables['stocks'].columns)
     assert 'stocks' in db.tables, "table creation failed"
 
+
+    db.run('drop table employees')
+    db.run('drop table positions')
     db.run('drop table departments')
     db.create_table(
         'departments', 
@@ -85,7 +88,6 @@ def test(db):
     )
     assert 'departments' in db.tables, "table creation failed"
 
-    db.run('drop table positions')
     db.create_table(
         'positions', 
         [    
@@ -105,7 +107,6 @@ def test(db):
     )
     assert 'positions' in db.tables, "table creation failed"
 
-    db.run('drop table employees')
     db.create_table(
         'employees', 
         [    
@@ -163,7 +164,7 @@ def test(db):
 
     trade = {'order_num': 1, 'date': '2006-01-05', 'trans': txData, 'symbol': 'RHAT', 'qty': 100, 'price': 35.14, 'afterHours': True}
 
-    # pre insert * select # 
+    # pre insert * select # trade
     sel = db.tables['stocks'].select('*')
     assert not len(sel) > 0, "no values should exist yet"
 
