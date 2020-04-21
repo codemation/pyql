@@ -237,7 +237,7 @@ class database:
                                 if not 'KEY' in cfg:
                                     colsInTable.append(describe_table_to_col(cfg))
                             else:
-                                primaryKey = inner(cfg.split('PRIMARY KEY')[1])
+                                primaryKey = inner(inner(cfg.split('PRIMARY KEY')[1]), '`', '`')
                         else:
                             if foreignKeys == None:
                                 foreignKeys = {}
@@ -550,7 +550,7 @@ class table:
         for cName, col in self.columns.items():
             if not cName in kw:
                 if not col.mods == None:
-                    if 'NOT NULL' in col.mods:
+                    if 'NOT NULL' in col.mods and not 'INCREMENT' in col.mods:
                         raise InvalidInputError(f'{cName} is a required field for INSERT in table {self.name}', "correct and try again")
                 continue
             if len(cols) > 2:
