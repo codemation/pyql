@@ -268,7 +268,7 @@ class database:
         for c in columns:
             # Allows for len(2) tuple input ('name', int) --> converts to col('name', int, None)
             if not isinstance(c, col):
-                cols.append(col(*c) if len(c) > 2 else col(*c, None)) 
+                cols.append(col(*c) if len(c) > 2 else col(*c, ''))
             else:
                 cols.append(c)
         self.tables[name] = table(name, self, cols, prim_key, **kw)
