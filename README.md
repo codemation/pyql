@@ -252,7 +252,7 @@ All Rows & Specific Columns from employees, Combining All Rows & Specific Column
             ..
         ]
 
-All Rows & Specific Columns from employees, Combining Specific Rows & Specific Columns of tables positions & departments4
+All Rows & Specific Columns from employees, Combining Specific Rows & Specific Columns of tables positions & departments
 
 Note: join='xTable' will only work if the calling table has a f-key reference to table 'xTable'
 
