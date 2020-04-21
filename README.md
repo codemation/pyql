@@ -1,6 +1,6 @@
 # pyql
 
-Simple python database orchestration utility which makes it easy to add tables, insert, select, update, delete items with tables
+A simple ORM(Object-relational mapping) for accessing, inserting, updating, deleting data within RBDMS tables using python
 
 ### Instalation
 
@@ -51,6 +51,7 @@ Existing tables schemas within databases are loaded when database object is inst
 Requires List of at least 2 item tuples, max 3
 
 ('ColumnName', type, 'modifiers')
+
 - ColumnName - str - database column name exclusions apply
 - types: str, int, float, byte, bool, None # JSON dumpable dicts fall under str types
 - modifiers: NOT NULL, UNIQUE, AUTO_INCREMENT
@@ -138,27 +139,40 @@ Note: Unique constraints are not validated by pyql but at db, so if modifier is 
 ### Insert Data
 Requires key-value pairs - may be input using dict or the following
 
-    tb = db.tables['stocks']
+Un-packing
 
+    # Note order_num is not required as auto_increment was specified
     trade = {'date': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': 35.14}
-    tb.insert(**trade)
-    tb.insert(
-        date='2006-01-05', # Note order_num was not required as auto_increment was specified
+    db.tables['stocks'].insert(**trade)
+
+    query:
+        INSERT INTO stocks (date, trans, symbol, qty, price) VALUES ("2006-01-05", "BUY", "RHAT", 100, 35.14)
+
+In-Line
+
+    # Note order_num is not required as auto_increment was specified
+    db.tables['stocks'].insert(
+        date='2006-01-05', 
         trans='BUY',
         symbol='RHAT',
-        qty=100.0,
-        price=35.14
+        qty=200.0,
+        price=65.14
     )
 
+    query:
+        INSERT INTO stocks (date, trans, symbol, qty, price) VALUES ("2006-01-05", "BUY", "RHAT", 200, 65.14)
+
 #### Inserting Special Data 
-Columns of type string can hold JSON dumpable python dictionaries as JSON strings and are automatically converted back into dicts when read. Nested Dicts are also Ok, but all items should be JSON compatible data types
+- Columns of type string can hold JSON dumpable python dictionaries as JSON strings and are automatically converted back into dicts when read. 
+- Nested Dicts are also Ok, but all items should be JSON compatible data types
+
 
         txData = {
             'type': 'BUY', 
             'condition': {
                         'limit': '36.00', 
                         'time': 'EndOfTradingDay'
-                    }
+            }
         }
 
         trade = {
@@ -166,101 +180,222 @@ Columns of type string can hold JSON dumpable python dictionaries as JSON string
             'trans': txData, # 
             'symbol': 'RHAT', 
             'qty': 100, 'price': 35.14, 'afterHours': True
-            }
+        }
 
         db.tables['stocks'].insert(**trade)
-    
+        query:
+            INSERT INTO stocks (order_num, date, trans, symbol, qty, price, afterHours) VALUES (1, "2006-01-05", '{"type": "BUY", "condition": {"limit": "36.00", "time": "EndOfTradingDay"}}', "RHAT", 100, 35.14, True)
+        result:
+            In:
+                db.tables['stocks'][1]['trans']['condition']
+            Out: #
+                {'limit': '36.00', 'time': 'EndOfTradingDay'}
+
         
 ### Select Data
-Usage:
+#### Basic Usage:
 
-    db.tables['table'].select('*')
+All Rows & Columns in table
 
-    db.tables['table'].select('col1', 'col2', 'col3')
+    db.tables['employees'].select('*')
 
-    db.tables['table'].select('col1', 'col2', 'col3')
+All Rows & Specific Columns 
 
-    db.tables['table'].select('col1', 'col2', 'col3', where={'col1': 'val1'})
+    db.tables['employees'].select('id', 'name', 'positionId')
 
+All Rows & Specific Columns with Matching Values
 
-#### Examples:
+    db.tables['employees'].select('id', 'name', 'positionId', where={'id': 1000})
 
-    tb = db.tables['stocks']
+All Rows & Specific Columns with Multple Matching Values
 
-Bracket indexs can only be used for primary keys and return all column values 
+    db.tables['employees'].select('id', 'name', 'positionId', where={'id': 1000, 'name': 'Frank Franklin'})
 
-    sel = tb[0] # Select * from stocks where order_num = 1
+#### Advanced Usage:
 
-If using WHERE condition for non-primary key column, where={'col': val} is required
+All Rows & Columns from employees, Combining ALL Rows & Columns of table positions (if foreign keys match)
 
-    sel = tb.select('*', where={'symbol': 'RHAT'}) # select * from stocks where symbol = 'RHAT'
+    # Basic Join
+    db.tables['employees'].select('*', join='positions'
+    query:
+        SELECT * FROM employees JOIN positions ON employees.positionId = positions.id
+    output:
+        [{
+            'employees.id': 1000, 'employees.name': 'Frank Franklin', 
+            'employees.positionId': 100101, 'positions.name': 'Director', 
+            'positions.departmentId': 1001},
+            ...
+        ]
+All Rows & Specific Columns from employees, Combining All Rows & Specific Columns of table positions (if foreign keys match)
 
-Iterate through table - grab all rows
-
-    sel = [row for row in tb] # select * from stocks
-
-    In:
-        print(sel)
-    Out:
+    # Basic Join 
+    db.tables['employees'].select('employees.name', 'positions.name', join='positions')
+    query:
+        SELECT employees.name,positions.name FROM employees JOIN positions ON employees.positionId = positions.id
+    output:
         [
-            {'order_num': 1, 'date': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': '35.14'},
-            {'order_num': 2, 'date': '2006-01-06', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': '35.14'},
+            {'employees.name': 'Frank Franklin', 'positions.name': 'Director'}, 
+            {'employees.name': 'Eli Doe', 'positions.name': 'Manager'},
+            ...
+        ]
+
+All Rows & Specific Columns from employees, Combining All Rows & Specific Columns of table positions (if foreign keys match) with matching 'position.name' value
+
+    # Basic Join with conditions
+    db.tables['employees'].select('employees.name', 'positions.name', join='positions', where={'positions.name': 'Director'})
+    query:
+        SELECT employees.name,positions.name FROM employees JOIN positions ON employees.positionId = positions.id WHERE positions.name='Director'
+    output:
+        [
+            {'employees.name': 'Frank Franklin', 'positions.name': 'Director'}, 
+            {'employees.name': 'Elly Doe', 'positions.name': 'Director'},
             ..
         ]
 
-#### Join Usage:
+All Rows & Specific Columns from employees, Combining Specific Rows & Specific Columns of tables positions & departments4
 
-    joinSel = db.tables['employees'].select(
-        '*', 
+Note: join='xTable' will only work if the calling table has a f-key reference to table 'xTable'
+
+    # Multi-table Join with conditions
+    db.tables['employees'].select(
+        'employees.name', 
+        'positions.name', 
+        'departments.name', 
         join={
-            'positions': {'employees.positionId': 'positions.id'},
+            'positions': {'employees.positionId': 'positions.id'}, 
             'departments': {'positions.departmentId': 'departments.id'}
-            },
-        where={
-            'positions.name': 'Director',
-            'departments.name': 'HR'
-            }
-    )
+        }, 
+        where={'positions.name': 'Director'})
+    query:
+        SELECT employees.name,positions.name,departments.name FROM employees JOIN positions ON employees.positionId = positions.id JOIN departments ON positions.departmentId = departments.id WHERE positions.name='Director'
+    result:
+        [
+            {'employees.name': 'Frank Franklin', 'positions.name': 'Director', 'departments.name': 'HR'}, 
+            {'employees.name': 'Elly Doe', 'positions.name': 'Director', 'departments.name': 'Sales'}
+        ]
 
-resulting query:
+Special Note: When performing multi-table joins, joining columns must be explicity provided. The key-value order is not explicity important, but will determine which column name is present in returned rows
 
-        SELECT * FROM employees JOIN positions ON employees.positionId = positions.id JOIN departments ON positions.departmentId = departments.id WHERE positions.name='Director' AND departments.name='HR'
+    join={'yTable': {'yTable.id': 'xTable.yId'}}
+    result:
+        [
+            {'xTable.a': 'val1', 'yTable.id': 'val2'},
+            {'xTable.a': 'val1', 'yTable.id': 'val3'}
+        ]
+OR
+
+    join={'yTable': {'xTable.yId': 'yTable.id'}}
+    result:
+        [
+            {'xTable.a': 'val1', 'xTable.yId': 'val2'},
+            {'xTable.a': 'val1', 'xTable.yId': 'val3'}
+        ]
+
+
+#### Special Examples:
+
+Bracket indexs can only be used for primary keys and return all column values
+
+    db.tables['employees'][1000]
+    query:
+        SELECT * FROM employees WHERE id=1000
+    result:
+        {'id': 1000, 'name': 'Frank Franklin', 'positionId': 100101}
     
-Auto foreign-key usage - will detect foreign key relationship if exists
 
-    db.tables['employees'].select('*', join='positions')
+Iterate through table - grab all rows - allowing client side filtering 
 
-resulting query:
+    for row in db.tables['employees']:
+        print(row['id], row['name'])
+    query:
+        SELECT * FROM employees
+    result:
+        1000 Frank Franklin
+        1001 Eli Doe
+        1002 Chris Smith
+        1003 Clara Carson
+    
+Using list comprehension
 
-        SELECT * FROM employees JOIN positions ON employees.positionId = positions.id
+    sel = [(row['id'], row['name']) for row in db.tables['employees']]
+    query:
+        SELECT * FROM employees
+    result:
+        [
+            (1000, 'Frank Franklin'), 
+            (1001, 'Eli Doe'), 
+            (1002, 'Chris Smith'), 
+            (1003, 'Clara Carson'),
+            ...
+        ]
 
 
 ### Update Data
+
 Define update values in-line or un-pack
 
-    tb = db.tables['stocks']
+    db.tables['stocks'].update(symbol='NTAP',trans='SELL', where={'order_num': 1})
+    query:
+        UPDATE stocks SET symbol = 'NTAP', trans = 'SELL' WHERE order_num=1
 
-    tb.update(
-        symbol='NTAP',trans='SELL', 
-        where={'order_num': 1})
+Un-Pack
 
-OR
-
-    # Un-Pack
-    toUpdate = {'symbol': 'NTAP', 'trans': 'SELL'}
+    #JSON capable Data 
+    txData = {'type': 'BUY', 'condition': {'limit': '36.00', 'time': 'EndOfTradingDay'}}
+    toUpdate = {'symbol': 'NTAP', 'trans': txData}
     where = {'order_num': 1}
 
-    tb.update(
-        **toUpdate,
-        where=where
-    )
+    db.tables['stocks'].update(**toUpdate, where=where)
+    query:
+        UPDATE stocks SET symbol = 'NTAP', trans = '{"type": "BUY", "condition": {"limit": "36.00", "time": "EndOfTradingDay"}}' WHERE order_num=1
 
-OR
+Bracket Assigment - Primary Key name assumed inside Brackets for value
 
-    # Primary-Key - Where [] 
-    tb[1] = toUpdate # Primary Key is assumed in brackets 
-    tb[1] = {'qty': 200}
+    #JSON capable Data 
+
+    txData = {'type': 'BUY', 'condition': {'limit': '36.00', 'time': 'EndOfTradingDay'}}
+    toUpdate = {'symbol': 'NTAP', 'trans': txData, 'qty': 500}
+
+    db.tables['stocks'][2] = toUpdate
+
+    query:
+        # check that primary_key value 2 exists
+        SELECT * FROM stocks WHERE order_num=2
+
+        # update 
+        UPDATE stocks SET symbol = 'NTAP', trans = '{"type": "BUY", "condition": {"limit": "36.00", "time": "EndOfTradingDay"}}', qty = 500 WHERE order_num=2
+
+    result:
+        db.tables['stocks'][2]
+        {
+            'order_num': 2, 
+            'date': '2006-01-05', 
+            'trans': {'type': 'BUY', 'condition': {'limit': '36.00', 'time': 'EndOfTradingDay'}}, 
+            'symbol': 'NTAP', 
+            'qty': 500, 
+            'price': 35.16, 
+            'afterHours': True
+        }
+
 
 ### Delete Data 
 
     db.tables['stocks'].delete(where={'order_num': 1})
+
+### Other
+Table Exists
+
+    'employees' in db
+    query:
+        show tables
+    result:
+        True
+
+Primary Key Exists:
+
+    1000 in db.tables['employees']
+    query:
+        SELECT * FROM employees WHERE id=1000
+    result:
+        True
+
