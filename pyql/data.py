@@ -405,9 +405,10 @@ class table:
             if not joinTable in self.database.tables:
                 error = f"{joinTable} does not exist in database"
                 raise InvalidInputError(error, f"valid tables {list(t for t in self.database.tables)}")
-            if not len(condition) == 1:
-                message = "join usage: join={'table1': {'table1.col': 'this.col'} } or  join={'table1': {'this.col': 'table1.col'} }"
-                raise InvalidInputError(f"join expects dict of len 1, not {len(condition)} for {condition}", message)
+            #if not len(condition) == 1:
+            #    message = "join usage: join={'table1': {'table1.col': 'this.col'} } or  join={'table1': {'this.col': 'table1.col'} }"
+            #    raise InvalidInputError(f"join expects dict of len 1, not {len(condition)} for {condition}", message)
+            count = 0
             for col1, col2 in condition.items():
                 for col in [col1, col2]:
                     if not '.' in col:
@@ -415,12 +416,14 @@ class table:
                         raise InvalidInputError(f"column {col} missing expected '.'", usage)
                     table, column = col.split('.')
                     if not table in self.database.tables:
-                        error = f"{kw['join']} does not exist in database"
+                        error = f"table {table} does not exist in database"
                         raise InvalidInputError(error, f"valid tables {list(t for t in self.database.tables)}")
                     if not column in self.database.tables[table].columns:
                         error = f"column {column} is not a valid column in table {table}"
                         raise InvalidColumnType(error, f"valid column types {self.database.tables[table].columns}")
-                join = f'{join}JOIN {joinTable} ON {col1} = {col2} '
+                joinAnd = ' AND ' if count > 0 else f'JOIN {joinTable} ON'
+                join = f'{join}{joinAnd} {col1} = {col2} '
+                count+=1
         return join
 
     def select(self, *selection, **kw):

@@ -14,7 +14,7 @@ class TestData(unittest.TestCase):
         env = ['DB_USER','DB_PASSWORD','DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_TYPE']
         conf = ['user','password','host','port', 'database', 'type']
         config = {cnfVal: os.getenv(dbVal).rstrip() for dbVal,cnfVal in zip(env,conf)}
-
+        config['debug'] = True
         db = data.database(
             mysql.connector.connect, 
             **config
@@ -24,7 +24,8 @@ class TestData(unittest.TestCase):
         import sqlite3
         db = data.database(
             sqlite3.connect, 
-            database="testdb"
+            database="testdb",
+            debug=True
             )
         test(db)
         refDb = data.database(
@@ -280,6 +281,18 @@ def test(db):
             where={'positions.name': position}
             )
         assert len(joinSel) == count, f"expected number of {position}'s' is {count}, found {len(joinSel)}"
+
+    # join select - testing multiple single table conditions
+    joinSel = db.tables['employees'].select(
+            '*', 
+            join={
+                'positions': {
+                            'employees.positionId':'positions.id', 
+                            'positions.id': 'employees.positionId'
+                            }
+                }
+    )
+    assert len(joinSel) == 60, f"expected number of employee's' is {60}, found {len(joinSel)}"
 
     
     # * select #
