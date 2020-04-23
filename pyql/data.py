@@ -457,18 +457,29 @@ class table:
             selection = '*'
             if 'join' in kw:
                 if isinstance(kw['join'], dict):
-                    colRefs = {f'{self.name}.{self.columns[c].name}': self.columns[c] for c in self.columns}
-                    keys = [f'{self.name}.{self.columns[c].name}' for c in self.columns]
-                    for table in list(kw['join'].keys()):
-                        for joinC1, joinC2 in kw['join'][table].items():
-                            if table in self.database.tables:
-                                for col in self.database.tables[table].columns:
-                                    column = self.database.tables[table].columns[col]
-                                    if f'{table}.{column.name}' == joinC2:
-                                        keys.append(joinC1)
+                    colRefs = {}
+                    links = {}
+                    keys = []
+                    for table in [self.name] + list(kw['join'].keys()):
+                        if table in self.database.tables:
+                            for col in self.database.tables[table].columns:
+                                column = self.database.tables[table].columns[col]
+                                if table in kw['join']:
+                                    cont = False
+                                    for col1, col2 in kw['join'][table].items():
+                                        if f'{table}.{col}' == f'{col2}':
+                                            cont = True
+                                            if col1 in links:
+                                                keys.append(links[col1])
+                                                links[col2] = links[col1]
+                                                break
+                                            links[col2] = col1
+                                            keys.append(col1)
+                                            break
+                                    if cont:
                                         continue
-                                    colRefs[f'{table}.{column.name}'] =  column
-                                    keys.append(f'{table}.{column.name}')
+                                colRefs[f'{table}.{column.name}'] =  column
+                                keys.append(f'{table}.{column.name}')
             else:
                 colRefs = self.columns
                 keys = list(self.columns.keys())
@@ -506,22 +517,19 @@ class table:
         rows = self.database.get(query)
 
         #dictonarify each row result and return
-        """
-        if not selection == '*':
-            keys = selection.split(',') if ',' in selection else selection.split(' ')
-        else:
-            keys = list(self.columns.keys())
-        """
         toReturn = []
         if not rows == None:
             for row in rows:
                 r_dict = {}
                 for i,v in enumerate(row):
-                    #if not v == None and self.columns[keys[i]].type == str and '{"' and '}' in v:
-                    if not v == None and colRefs[keys[i]].type == str and '{"' and '}' in v:
-                            r_dict[keys[i]] = json.loads(v)
-                    else:
-                        r_dict[keys[i]] = v if not colRefs[keys[i]].type == bool else bool(v)
+                    try:
+                        if not v == None and colRefs[keys[i]].type == str and '{"' and '}' in v:
+                                r_dict[keys[i]] = json.loads(v)
+                        else:
+                            r_dict[keys[i]] = v if not colRefs[keys[i]].type == bool else bool(v)
+                    except Exception as e:
+                        self.database.log.exception(f"error processing results on row {row} index {i} value {v} with {keys}")
+                        assert False
                 toReturn.append(r_dict)
         return toReturn
     def insert(self, **kw):
