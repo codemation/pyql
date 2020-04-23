@@ -216,7 +216,7 @@ All Rows & Specific Columns with Multple Matching Values
 All Rows & Columns from employees, Combining ALL Rows & Columns of table positions (if foreign keys match)
 
     # Basic Join
-    db.tables['employees'].select('*', join='positions'
+    db.tables['employees'].select('*', join='positions')
     query:
         SELECT * FROM employees JOIN positions ON employees.positionId = positions.id
     output:
