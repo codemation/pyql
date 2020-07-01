@@ -30,14 +30,17 @@ Use install script to install the pyql into the activated environment libraries
 ### DB connection
 
         import sqlite3
-        db = database(
+        from pyql import data
+
+        db = data.Database(
             sqlite3.connect, 
             database="testdb"
             )
     
+        from pyql import data
         import mysql.connector
 
-        db = database(
+        db = data.Database(
             mysql.connector.connect,
             database='mysql_database',
             user='mysqluser',
@@ -50,9 +53,9 @@ Existing tables schemas within databases are loaded when database object is inst
 ### Table Create
 Requires List of at least 2 item tuples, max 3
 
-('ColumnName', type, 'modifiers')
+('column_name', type, 'modifiers')
 
-- ColumnName - str - database column name exclusions apply
+- column_name - str - database column name exclusions apply
 - types: str, int, float, byte, bool, None # JSON dumpable dicts fall under str types
 - modifiers: NOT NULL, UNIQUE, AUTO_INCREMENT
 
@@ -106,11 +109,11 @@ Note: Unique constraints are not validated by pyql but at db, so if modifier is 
         [    
             ('id', int, 'UNIQUE'),
             ('name', str),
-            ('departmentId', int)
+            ('department_id', int)
         ], 
         'id', # Primary Key
-        fKeys={
-            'departmentId': {
+        foreign_keys={
+            'department_id': {
                     'table': 'departments', 
                     'ref': 'id',
                     'mods': 'ON UPDATE CASCADE ON DELETE CASCADE'
@@ -123,11 +126,11 @@ Note: Unique constraints are not validated by pyql but at db, so if modifier is 
         [    
             ('id', int, 'UNIQUE'),
             ('name', str),
-            ('positionId', int)
+            ('position_id', int)
         ], 
         'id', # Primary Key
-        fKeys={
-            'positionId': {
+        foreign_keys={
+            'position_id': {
                     'table': 'positions', 
                     'ref': 'id',
                     'mods': 'ON UPDATE CASCADE ON DELETE CASCADE'
@@ -167,29 +170,29 @@ In-Line
 - Nested Dicts are also Ok, but all items should be JSON compatible data types
 
 
-        txData = {
+        tx_data = {
             'type': 'BUY', 
             'condition': {
                         'limit': '36.00', 
-                        'time': 'EndOfTradingDay'
+                        'time': 'end_of_trading_day'
             }
         }
 
         trade = {
             'order_num': 1, 'date': '2006-01-05', 
-            'trans': txData, # 
+            'trans': tx_data, # 
             'symbol': 'RHAT', 
-            'qty': 100, 'price': 35.14, 'afterHours': True
+            'qty': 100, 'price': 35.14, 'after_hours': True
         }
 
         db.tables['stocks'].insert(**trade)
         query:
-            INSERT INTO stocks (order_num, date, trans, symbol, qty, price, afterHours) VALUES (1, "2006-01-05", '{"type": "BUY", "condition": {"limit": "36.00", "time": "EndOfTradingDay"}}', "RHAT", 100, 35.14, True)
+            INSERT INTO stocks (order_num, date, trans, symbol, qty, price, after_hours) VALUES (1, "2006-01-05", '{"type": "BUY", "condition": {"limit": "36.00", "time": "end_of_trading_day"}}', "RHAT", 100, 35.14, True)
         result:
             In:
                 db.tables['stocks'][1]['trans']['condition']
             Out: #
-                {'limit': '36.00', 'time': 'EndOfTradingDay'}
+                {'limit': '36.00', 'time': 'end_of_trading_day'}
 
         
 ### Select Data
@@ -201,15 +204,15 @@ All Rows & Columns in table
 
 All Rows & Specific Columns 
 
-    db.tables['employees'].select('id', 'name', 'positionId')
+    db.tables['employees'].select('id', 'name', 'position_id')
 
 All Rows & Specific Columns with Matching Values
 
-    db.tables['employees'].select('id', 'name', 'positionId', where={'id': 1000})
+    db.tables['employees'].select('id', 'name', 'position_id', where={'id': 1000})
 
 All Rows & Specific Columns with Multple Matching Values
 
-    db.tables['employees'].select('id', 'name', 'positionId', where={'id': 1000, 'name': 'Frank Franklin'})
+    db.tables['employees'].select('id', 'name', 'position_id', where={'id': 1000, 'name': 'Frank Franklin'})
 
 #### Advanced Usage:
 
@@ -218,12 +221,12 @@ All Rows & Columns from employees, Combining ALL Rows & Columns of table positio
     # Basic Join
     db.tables['employees'].select('*', join='positions')
     query:
-        SELECT * FROM employees JOIN positions ON employees.positionId = positions.id
+        SELECT * FROM employees JOIN positions ON employees.position_id = positions.id
     output:
         [{
             'employees.id': 1000, 'employees.name': 'Frank Franklin', 
-            'employees.positionId': 100101, 'positions.name': 'Director', 
-            'positions.departmentId': 1001},
+            'employees.position_id': 100101, 'positions.name': 'Director', 
+            'positions.department_id': 1001},
             ...
         ]
 All Rows & Specific Columns from employees, Combining All Rows & Specific Columns of table positions (if foreign keys match)
@@ -231,7 +234,7 @@ All Rows & Specific Columns from employees, Combining All Rows & Specific Column
     # Basic Join 
     db.tables['employees'].select('employees.name', 'positions.name', join='positions')
     query:
-        SELECT employees.name,positions.name FROM employees JOIN positions ON employees.positionId = positions.id
+        SELECT employees.name,positions.name FROM employees JOIN positions ON employees.position_id = positions.id
     output:
         [
             {'employees.name': 'Frank Franklin', 'positions.name': 'Director'}, 
@@ -244,7 +247,7 @@ All Rows & Specific Columns from employees, Combining All Rows & Specific Column
     # Basic Join with conditions
     db.tables['employees'].select('employees.name', 'positions.name', join='positions', where={'positions.name': 'Director'})
     query:
-        SELECT employees.name,positions.name FROM employees JOIN positions ON employees.positionId = positions.id WHERE positions.name='Director'
+        SELECT employees.name,positions.name FROM employees JOIN positions ON employees.position_id = positions.id WHERE positions.name='Director'
     output:
         [
             {'employees.name': 'Frank Franklin', 'positions.name': 'Director'}, 
@@ -254,7 +257,7 @@ All Rows & Specific Columns from employees, Combining All Rows & Specific Column
 
 All Rows & Specific Columns from employees, Combining Specific Rows & Specific Columns of tables positions & departments
 
-Note: join='xTable' will only work if the calling table has a f-key reference to table 'xTable'
+Note: join='x_table' will only work if the calling table has a f-key reference to table 'x_table'
 
     # Multi-table Join with conditions
     db.tables['employees'].select(
@@ -262,12 +265,12 @@ Note: join='xTable' will only work if the calling table has a f-key reference to
         'positions.name', 
         'departments.name', 
         join={
-            'positions': {'employees.positionId': 'positions.id'}, 
-            'departments': {'positions.departmentId': 'departments.id'}
+            'positions': {'employees.position_id': 'positions.id'}, 
+            'departments': {'positions.department_id': 'departments.id'}
         }, 
         where={'positions.name': 'Director'})
     query:
-        SELECT employees.name,positions.name,departments.name FROM employees JOIN positions ON employees.positionId = positions.id JOIN departments ON positions.departmentId = departments.id WHERE positions.name='Director'
+        SELECT employees.name,positions.name,departments.name FROM employees JOIN positions ON employees.position_id = positions.id JOIN departments ON positions.department_id = departments.id WHERE positions.name='Director'
     result:
         [
             {'employees.name': 'Frank Franklin', 'positions.name': 'Director', 'departments.name': 'HR'}, 
@@ -276,31 +279,31 @@ Note: join='xTable' will only work if the calling table has a f-key reference to
 
 Special Note: When performing multi-table joins, joining columns must be explicity provided. The key-value order is not explicity important, but will determine which column name is present in returned rows
 
-    join={'yTable': {'yTable.id': 'xTable.yId'}}
+    join={'y_table': {'y_table.id': 'x_table.y_id'}}
     result:
         [
-            {'xTable.a': 'val1', 'yTable.id': 'val2'},
-            {'xTable.a': 'val1', 'yTable.id': 'val3'}
+            {'x_table.a': 'val1', 'y_table.id': 'val2'},
+            {'x_table.a': 'val1', 'y_table.id': 'val3'}
         ]
 OR
 
-    join={'yTable': {'xTable.yId': 'yTable.id'}}
+    join={'y_table': {'x_table.y_id': 'y_table.id'}}
     result:
         [
-            {'xTable.a': 'val1', 'xTable.yId': 'val2'},
-            {'xTable.a': 'val1', 'xTable.yId': 'val3'}
+            {'x_table.a': 'val1', 'x_table.y_id': 'val2'},
+            {'x_table.a': 'val1', 'x_table.y_id': 'val3'}
         ]
 
 
 #### Special Examples:
 
-Bracket indexs can only be used for primary keys and return all column values
+Bracket indexs can only be used for primary keys and return entire row, if existent
 
     db.tables['employees'][1000]
     query:
         SELECT * FROM employees WHERE id=1000
     result:
-        {'id': 1000, 'name': 'Frank Franklin', 'positionId': 100101}
+        {'id': 1000, 'name': 'Frank Franklin', 'position_id': 100101}
     
 
 Iterate through table - grab all rows - allowing client side filtering 
@@ -341,40 +344,40 @@ Define update values in-line or un-pack
 Un-Pack
 
     #JSON capable Data 
-    txData = {'type': 'BUY', 'condition': {'limit': '36.00', 'time': 'EndOfTradingDay'}}
-    toUpdate = {'symbol': 'NTAP', 'trans': txData}
+    tx_data = {'type': 'BUY', 'condition': {'limit': '36.00', 'time': 'end_of_trading_day'}}
+    to_update = {'symbol': 'NTAP', 'trans': tx_data}
     where = {'order_num': 1}
 
-    db.tables['stocks'].update(**toUpdate, where=where)
+    db.tables['stocks'].update(**to_update, where=where)
     query:
-        UPDATE stocks SET symbol = 'NTAP', trans = '{"type": "BUY", "condition": {"limit": "36.00", "time": "EndOfTradingDay"}}' WHERE order_num=1
+        UPDATE stocks SET symbol = 'NTAP', trans = '{"type": "BUY", "condition": {"limit": "36.00", "time": "end_of_trading_day"}}' WHERE order_num=1
 
 Bracket Assigment - Primary Key name assumed inside Brackets for value
 
     #JSON capable Data 
 
-    txData = {'type': 'BUY', 'condition': {'limit': '36.00', 'time': 'EndOfTradingDay'}}
-    toUpdate = {'symbol': 'NTAP', 'trans': txData, 'qty': 500}
+    tx_data = {'type': 'BUY', 'condition': {'limit': '36.00', 'time': 'end_of_trading_day'}}
+    to_update = {'symbol': 'NTAP', 'trans': tx_data, 'qty': 500}
 
-    db.tables['stocks'][2] = toUpdate
+    db.tables['stocks'][2] = to_update
 
     query:
         # check that primary_key value 2 exists
         SELECT * FROM stocks WHERE order_num=2
 
         # update 
-        UPDATE stocks SET symbol = 'NTAP', trans = '{"type": "BUY", "condition": {"limit": "36.00", "time": "EndOfTradingDay"}}', qty = 500 WHERE order_num=2
+        UPDATE stocks SET symbol = 'NTAP', trans = '{"type": "BUY", "condition": {"limit": "36.00", "time": "end_of_trading_day"}}', qty = 500 WHERE order_num=2
 
     result:
         db.tables['stocks'][2]
         {
             'order_num': 2, 
             'date': '2006-01-05', 
-            'trans': {'type': 'BUY', 'condition': {'limit': '36.00', 'time': 'EndOfTradingDay'}}, 
+            'trans': {'type': 'BUY', 'condition': {'limit': '36.00', 'time': 'end_of_trading_day'}}, 
             'symbol': 'NTAP', 
             'qty': 500, 
             'price': 35.16, 
-            'afterHours': True
+            'after_hours': True
         }
 
 
@@ -398,4 +401,3 @@ Primary Key Exists:
         SELECT * FROM employees WHERE id=1000
     result:
         True
-
