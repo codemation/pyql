@@ -146,10 +146,14 @@ Un-packing
 
     # Note order_num is not required as auto_increment was specified
     trade = {'date': '2006-01-05', 'trans': 'BUY', 'symbol': 'RHAT', 'qty': 100.0, 'price': 35.14}
-    db.tables['stocks'].insert(**trade)
+    db.tables['stocks'].insert(
+        **trade
+    )
 
     query:
-        INSERT INTO stocks (date, trans, symbol, qty, price) VALUES ("2006-01-05", "BUY", "RHAT", 100, 35.14)
+        INSERT INTO 
+            stocks (date, trans, symbol, qty, price) 
+            VALUES ("2006-01-05", "BUY", "RHAT", 100, 35.14)
 
 In-Line
 
@@ -187,7 +191,9 @@ In-Line
 
         db.tables['stocks'].insert(**trade)
         query:
-            INSERT INTO stocks (order_num, date, trans, symbol, qty, price, after_hours) VALUES (1, "2006-01-05", '{"type": "BUY", "condition": {"limit": "36.00", "time": "end_of_trading_day"}}', "RHAT", 100, 35.14, True)
+            INSERT INTO 
+                stocks (order_num, date, trans, symbol, qty, price, after_hours) 
+                VALUES (1, "2006-01-05", '{"type": "BUY", "condition": {"limit": "36.00", "time": "end_of_trading_day"}}', "RHAT", 100, 35.14, True)
         result:
             In:
                 db.tables['stocks'][1]['trans']['condition']
@@ -204,22 +210,42 @@ All Rows & Columns in table
 
 All Rows & Specific Columns 
 
-    db.tables['employees'].select('id', 'name', 'position_id')
+    db.tables['employees'].select(
+        'id', 
+        'name', 
+        'position_id'
+    )
 
 All Rows & Specific Columns with Matching Values
 
-    db.tables['employees'].select('id', 'name', 'position_id', where={'id': 1000})
+    db.tables['employees'].select(
+        'id', 
+        'name', 
+        'position_id', 
+        where={'id': 1000}
+    )
 
 All Rows & Specific Columns with Multple Matching Values
 
-    db.tables['employees'].select('id', 'name', 'position_id', where={'id': 1000, 'name': 'Frank Franklin'})
+    db.tables['employees'].select(
+        'id', 
+        'name', 
+        'position_id', 
+        where={
+            'id': 1000, 
+            'name': 'Frank Franklin'
+            }
+        )
 
 #### Advanced Usage:
 
 All Rows & Columns from employees, Combining ALL Rows & Columns of table positions (if foreign keys match)
 
     # Basic Join
-    db.tables['employees'].select('*', join='positions')
+    db.tables['employees'].select(
+        '*', 
+        join='positions'
+    )
     query:
         SELECT * FROM employees JOIN positions ON employees.position_id = positions.id
     output:
@@ -232,7 +258,11 @@ All Rows & Columns from employees, Combining ALL Rows & Columns of table positio
 All Rows & Specific Columns from employees, Combining All Rows & Specific Columns of table positions (if foreign keys match)
 
     # Basic Join 
-    db.tables['employees'].select('employees.name', 'positions.name', join='positions')
+    db.tables['employees'].select(
+        'employees.name', 
+        'positions.name', 
+        join='positions'
+    )
     query:
         SELECT employees.name,positions.name FROM employees JOIN positions ON employees.position_id = positions.id
     output:
@@ -247,7 +277,14 @@ All Rows & Specific Columns from employees, Combining All Rows & Specific Column
     # Basic Join with conditions
     db.tables['employees'].select('employees.name', 'positions.name', join='positions', where={'positions.name': 'Director'})
     query:
-        SELECT employees.name,positions.name FROM employees JOIN positions ON employees.position_id = positions.id WHERE positions.name='Director'
+        SELECT 
+            employees.name,
+            positions.name 
+        FROM 
+            employees 
+        JOIN positions ON 
+            employees.position_id = positions.id 
+        WHERE positions.name='Director'
     output:
         [
             {'employees.name': 'Frank Franklin', 'positions.name': 'Director'}, 
@@ -270,7 +307,18 @@ Note: join='x_table' will only work if the calling table has a f-key reference t
         }, 
         where={'positions.name': 'Director'})
     query:
-        SELECT employees.name,positions.name,departments.name FROM employees JOIN positions ON employees.position_id = positions.id JOIN departments ON positions.department_id = departments.id WHERE positions.name='Director'
+        SELECT 
+            employees.name,
+            positions.name,
+            departments.name 
+        FROM 
+            employees 
+        JOIN positions ON 
+            employees.position_id = positions.id 
+        JOIN departments ON 
+            positions.department_id = departments.id 
+        WHERE 
+            positions.name='Director'
     result:
         [
             {'employees.name': 'Frank Franklin', 'positions.name': 'Director', 'departments.name': 'HR'}, 
@@ -293,6 +341,93 @@ OR
             {'x_table.a': 'val1', 'x_table.y_id': 'val2'},
             {'x_table.a': 'val1', 'x_table.y_id': 'val3'}
         ]
+## Operator Syntax
+The Following operators are supported within the list query syntax
+
+'=', '==', '<>', '!=', '>', '>=', '<', '<=', 'like', 'in', 'not in', 'not like'
+
+Operator Syntax Requires a list-of-lists and supports multiple combined conditions
+
+    #Syntax
+
+    db.tables['table'].select(
+        '*',
+        where=[[condition1], [condition2], [condition3]]
+    )
+
+
+    db.tables['table'].select(
+        '*',
+        where=[
+            ['col1', 'like', 'abc*'],
+            ['col2', '<', 10],
+            ['col3', 'not in', ['a', 'b', 'c'] ]
+        ]
+    )
+
+Examples:
+
+    find_employee = db.tables['employees'].select(
+        'id', 
+        'name',
+        where=[
+            ['name', 'like', '*ank*']
+        ]
+    )
+    query:
+        SELECT id,name FROM employees WHERE name like '%ank%'
+    result:
+        [{'id': 1016, 'name': 'Frank Franklin'}, {'id': 1018, 'name': 'Joe Franklin'}, {'id': 1020, 'name': 'Frank Franklin'}, {'id': 1034, 'name': 'Dana Franklin'}, {'id': 1036, 'name': 'Jane Franklin'}, {'id': 1042, 'name': 'Frank Franklin'}, {'id': 1043, 'name': 'Eli Franklin'}, {'id': 1052, 'name': 'Eli Franklin'}, {'id': 1057, 'name': 'Eli Franklin'}]
+
+
+
+    delete_department = db.tables['departments'].delete(
+        where=[
+            ['id', '<', 2000]
+        ]
+    )
+    query:
+        DELETE 
+            FROM 
+                departments 
+            WHERE 
+                id < 2000
+
+
+    join_sel = db.tables['employees'].select(
+        '*', 
+        join={
+            'positions': {
+                'employees.position_id':'positions.id', 
+                'positions.id': 'employees.position_id'
+            }
+        },
+        where=[
+            [
+                'positions.name', 'not in', ['Manager', 'Intern', 'Rep']
+            ],
+            [
+                'positions.department_id', '<>', 2001 # not equal
+            ]
+        ]
+    )
+    query:
+        SELECT 
+            * 
+        FROM 
+            employees 
+        JOIN 
+            positions 
+            ON 
+                employees.position_id = positions.id  
+            AND  
+                positions.id = employees.position_id 
+        WHERE 
+            positions.name not in ('Manager', 'Intern', 'Rep') 
+        AND 
+            positions.department_id <> 2001
+
+
 
 
 #### Special Examples:
@@ -350,7 +485,13 @@ Un-Pack
 
     db.tables['stocks'].update(**to_update, where=where)
     query:
-        UPDATE stocks SET symbol = 'NTAP', trans = '{"type": "BUY", "condition": {"limit": "36.00", "time": "end_of_trading_day"}}' WHERE order_num=1
+        UPDATE 
+            stocks 
+        SET 
+            symbol = 'NTAP', 
+            trans = '{"type": "BUY", "condition": {"limit": "36.00", "time": "end_of_trading_day"}}' 
+        WHERE 
+            order_num=1
 
 Bracket Assigment - Primary Key name assumed inside Brackets for value
 
@@ -363,10 +504,22 @@ Bracket Assigment - Primary Key name assumed inside Brackets for value
 
     query:
         # check that primary_key value 2 exists
-        SELECT * FROM stocks WHERE order_num=2
+        SELECT 
+            * 
+        FROM 
+            stocks 
+        WHERE 
+            order_num=2
 
         # update 
-        UPDATE stocks SET symbol = 'NTAP', trans = '{"type": "BUY", "condition": {"limit": "36.00", "time": "end_of_trading_day"}}', qty = 500 WHERE order_num=2
+        UPDATE 
+            stocks 
+        SET 
+            symbol = 'NTAP', 
+            trans = '{"type": "BUY", "condition": {"limit": "36.00", "time": "end_of_trading_day"}}', 
+            qty = 500 
+        WHERE 
+            order_num=2
 
     result:
         db.tables['stocks'][2]
