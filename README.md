@@ -264,7 +264,15 @@ All Rows & Specific Columns from employees, Combining All Rows & Specific Column
         join='positions'
     )
     query:
-        SELECT employees.name,positions.name FROM employees JOIN positions ON employees.position_id = positions.id
+        SELECT 
+            employees.name,
+            positions.name 
+        FROM 
+            employees 
+        JOIN 
+            positions 
+        ON 
+            employees.position_id = positions.id
     output:
         [
             {'employees.name': 'Frank Franklin', 'positions.name': 'Director'}, 
@@ -275,7 +283,14 @@ All Rows & Specific Columns from employees, Combining All Rows & Specific Column
 All Rows & Specific Columns from employees, Combining All Rows & Specific Columns of table positions (if foreign keys match) with matching 'position.name' value
 
     # Basic Join with conditions
-    db.tables['employees'].select('employees.name', 'positions.name', join='positions', where={'positions.name': 'Director'})
+    db.tables['employees'].select(
+        'employees.name', 
+        'positions.name', 
+        join='positions', # Possible due to foreign key relationship 
+        where={
+            'positions.name': 'Director'
+            }
+        )
     query:
         SELECT 
             employees.name,
