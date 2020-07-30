@@ -284,13 +284,13 @@ def test(db):
 
     # join select - testing multiple single table conditions
     join_sel = db.tables['employees'].select(
-            '*', 
-            join={
-                'positions': {
-                            'employees.position_id':'positions.id', 
-                            'positions.id': 'employees.position_id'
-                            }
-                }
+        '*', 
+        join={
+            'positions': {
+                'employees.position_id':'positions.id', 
+                'positions.id': 'employees.position_id'
+            }
+        }
     )
     assert len(join_sel) == 60, f"expected number of employee's' is {60}, found {len(join_sel)}"
 
@@ -347,6 +347,27 @@ def test(db):
     )
     assert len(join_sel) == 4, f"expected number of employee's' is {4}, found {len(join_sel)}"
 
+    # Not in Operator Usage
+
+    join_sel = db.tables['employees'].select(
+        '*', 
+        join={
+            'positions': {
+                'employees.position_id':'positions.id', 
+                'positions.id': 'employees.position_id'
+            }
+        },
+        where=[
+            [
+                'positions.name', 'not in', ['Manager', 'Intern', 'Rep']
+            ],
+            {
+                "positions.id": 100101
+            }
+        ]
+    )
+    assert len(join_sel) == 1, f"expected number of employee's' is {1}, found {len(join_sel)}"
+
     # Less Than Operator Usage
 
     join_sel = db.tables['employees'].select(
@@ -388,6 +409,24 @@ def test(db):
         ]
     )
     assert len(join_sel) == 3, f"expected number of employee's' is {3}, found {len(join_sel)}"  
+
+    delete_department = db.tables['departments'].delete(
+        where=[
+            ['id', '<', 2000]
+        ]
+    )
+
+    find_employee = db.tables['employees'].select(
+        'id', 
+        'name',
+        where=[
+            ['name', 'like', '*ank*']
+        ]
+    )
+    assert len(find_employee) > 0, f"expected at least 1 employee, found {len(find_employee)}"
+
+
+
 
     # * select #
     sel = db.tables['stocks'].select('*')
