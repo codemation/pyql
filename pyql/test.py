@@ -294,7 +294,101 @@ def test(db):
     )
     assert len(join_sel) == 60, f"expected number of employee's' is {60}, found {len(join_sel)}"
 
-    
+    # Like Operator Usage
+
+    join_sel = db.tables['employees'].select(
+        '*', 
+        join={
+            'positions': {
+                'employees.position_id':'positions.id', 
+                'positions.id': 'employees.position_id'
+            }
+        },
+        where=[
+            ['positions.name', 'like', 'Dir*']
+        ]
+    )
+    assert len(join_sel) == 4, f"expected number of employee's' is {4}, found {len(join_sel)}"
+
+    # In operator Usage
+
+    join_sel = db.tables['employees'].select(
+        '*', 
+        join={
+            'positions': {
+                'employees.position_id':'positions.id', 
+                'positions.id': 'employees.position_id'
+            }
+        },
+        where=[
+            [
+                'positions.name', 'in', ['Manager', 'Director']
+            ]
+        ]
+    )
+    assert len(join_sel) == 12, f"expected number of employee's' is {12}, found {len(join_sel)}"
+
+
+    # Not in Operator Usage
+
+    join_sel = db.tables['employees'].select(
+        '*', 
+        join={
+            'positions': {
+                'employees.position_id':'positions.id', 
+                'positions.id': 'employees.position_id'
+            }
+        },
+        where=[
+            [
+                'positions.name', 'not in', ['Manager', 'Intern', 'Rep']
+            ]
+        ]
+    )
+    assert len(join_sel) == 4, f"expected number of employee's' is {4}, found {len(join_sel)}"
+
+    # Less Than Operator Usage
+
+    join_sel = db.tables['employees'].select(
+        '*', 
+        join={
+            'positions': {
+                'employees.position_id':'positions.id', 
+                'positions.id': 'employees.position_id'
+            }
+        },
+        where=[
+            [
+                'positions.name', 'not in', ['Manager', 'Intern', 'Rep']
+            ],
+            [
+                'positions.department_id', '<', 2000
+            ]
+        ]
+    )
+    assert len(join_sel) == 1, f"expected number of employee's' is {1}, found {len(join_sel)}"   
+
+    # Less Than Operator Usage + 'not in'
+
+    join_sel = db.tables['employees'].select(
+        '*', 
+        join={
+            'positions': {
+                'employees.position_id':'positions.id', 
+                'positions.id': 'employees.position_id'
+            }
+        },
+        where=[
+            [
+                'positions.name', 'not in', ['Manager', 'Intern', 'Rep']
+            ],
+            [
+                'positions.department_id', '<>', 2001 # not equal
+            ]
+        ]
+    )
+    assert len(join_sel) == 3, f"expected number of employee's' is {3}, found {len(join_sel)}"  
+
     # * select #
     sel = db.tables['stocks'].select('*')
     print(sel)
@@ -339,6 +433,17 @@ def test(db):
     sel = db.tables['stocks'].select('price', 'date', where={'symbol':'RHAT'})
     check_sel(['price', 'date'], sel)
     print(sel)
+
+    # Comparison Operators
+
+    sel = db.tables['stocks'].select(
+        'price', 
+        'date',
+        where=[
+            ['order_num', '>', 0],
+            {'symbol': 'RHAT'}
+        ]
+    )
     
     # Update Data
     tx_old = {'type': 'BUY', 'condition': {'limit': '36.00', 'time': 'end_of_trading_day'}}
